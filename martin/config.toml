@@ -1,0 +1,11 @@
+listen_addresses = ["0.0.0.0:3000"]
+
+[datasource]
+connection_string = "postgres://postgres:password@postgres-db-1:5432/jasindogiss"
+
+[[table]]
+name = "public.petak_sawah"
+id = "petak_sawah"
+geometry_field = "geometry"         # Ganti sesuai nama field geometry kamu
+id_field = "id"                     # Ganti sesuai nama ID unik
+fields = ["id", "DESA", "LUAS"]     # Ganti sesuai nama kolom yang kamu mau tampilkan sebagai properti

@@ -1,0 +1,13 @@
+const express = require('express');
+const router = express.Router();  // Use the standard Express router
+const petakUserController = require('../controllers/petakUser.controller');
+
+
+router.post('/save-petak', petakUserController.savePetakUser)
+router.get('/petak-user/:id', petakUserController.listPetakUser)
+router.get('/point-petak-user/:id', petakUserController.pointPetakUser)
+router.get('/list-point-petak-user/:id', petakUserController.listPointPetakUser)
+router.get('/petakid/:id', petakUserController.petakId)
+router.delete('/petak/:id', petakUserController.deletePetakUser)
+
+module.exports = router;

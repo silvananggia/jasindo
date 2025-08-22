@@ -1,0 +1,92 @@
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+.ol-zoom {
+  bottom: 60px !important;
+  right: 10px !important;
+  top: auto !important;
+  left: auto !important;
+}
+
+/* Custom CSS for positioning the GeolocationBar */
+.geolocation-control {
+  bottom: 120px !important;
+  right: 10px !important;
+
+}
+
+#map-switch-satellite {
+  background-size: cover;
+  background-image: url('./assets/images/basemap/imagery.png');
+}
+
+#map-switch-basic {
+  background-size: cover;
+  background-image: url('./assets/images/basemap/road.png');
+}
+
+#map-switch-topography {
+  background-size: cover;
+  background-image: url('./assets/images/basemap/typography.png');
+}
+
+#map-switch-default {
+  background-size: cover;
+  background-image: url('./assets/images/basemap/plain.png');
+}
+
+
+.active {
+  color: #1a73e8; /* Change this to your desired text color */
+  /* Add any other styles you want for the active element */
+}
+
+.basemap-option {
+  display: inline-flex;
+}
+
+.basemap-select {
+  display: none;
+}
+
+.basemap-select:hover {
+  display: block;
+}
+/* Show the filter-box when the overlay-select element is hovered */
+.layer-select:hover + .basemap-select {
+  display: block;
+}
+
+.button-container {
+  text-align: center; /* Center the content horizontally */
+}
+
+.button-container .image {
+  position: relative;
+
+  background-color: white;
+  border: 1px solid #ccc;
+  margin: 5px;
+  border-radius: 5px;
+  z-index: 1000;
+  height: 65px;
+  width: 65px;
+  cursor: pointer;
+}
+
+.button-container .image.active {
+  border: 2px solid #1a73e8 !important;;
+}
+
+

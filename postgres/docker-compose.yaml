@@ -1,0 +1,39 @@
+version: '3.1'
+
+services:
+  db:
+    image: 'postgis/postgis:16-3.4'
+    restart: 'no'
+    environment:
+      POSTGRES_PASSWORD: 'password'
+    ports:
+      - 5432:5432
+    volumes:
+      - data:/var/lib/postgresql/data
+    networks:
+      gisnet:
+        aliases:
+          - postgis15.docker
+
+  pgadmin4:
+    image: 'dpage/pgadmin4'
+    restart: 'no'
+    environment:
+      PGADMIN_DEFAULT_EMAIL: silvananggia@gmail.com
+      PGADMIN_DEFAULT_PASSWORD: password
+      PGADMIN_CONFIG_ENHANCED_COOKIE_PROTECTION: 'True'
+      PGADMIN_CONFIG_CONSOLE_LOG_LEVEL: '10'
+    ports:
+      - 5480:80
+    networks:
+      gisnet:
+        aliases:
+          - pgadmin4.docker
+
+volumes:
+  data:
+    name: data-postgis15-data
+
+networks:
+  gisnet:
+    external: true

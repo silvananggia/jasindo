@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vector Tiles Display</title>
+    <link href="https://api.mapbox.com/mapbox-gl-js/v2.10.0/mapbox-gl.css" rel="stylesheet">
+    <style>
+        #map {
+            width: 100%;
+            height: 500px;
+        }
+        #info {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background-color: white;
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 999;
+        }
+    </style>
+</head>
+<body>
+<div id="map"></div>
+<div id="info">Click on a province to see information.</div>
+<script src="https://api.mapbox.com/mapbox-gl-js/v2.10.0/mapbox-gl.js"></script>
+<script>
+    mapboxgl.accessToken = 'pk.eyJ1Ijoic2lsdmFuYW5nZ2lhIiwiYSI6ImNqeHRwMDR3bjBmYXozY3Fsd2g5cnJydzAifQ.YMEsC2qLti_Ibbo7fPsryQ';
+
+    const map = new mapboxgl.Map({
+        container: 'map',
+        style: 'mapbox://styles/mapbox/streets-v11',
+        center: [106.8272, -6.1751],  // Coordinates for Indonesia (Jakarta)
+        zoom: 10
+    });
+
+    map.on('load', function() {
+        // Adding the vector tiles source
+        map.addSource('admin-boundaries', {
+            type: 'vector',
+            tiles: ['http://10.27.57.92:3000/batas_admin_provinsi/{z}/{x}/{y}'],
+            minzoom: 0,
+            maxzoom: 14
+        });
+
+        // Adding the layer
+        map.addLayer({
+            id: 'province-boundaries',
+            type: 'fill',
+            source: 'admin-boundaries',
+            'source-layer': 'batas_admin_provinsi', // Must match exactly from Martin catalog
+            paint: {
+                'fill-color': 'rgba(255, 0, 0, 0.5)',
+                'fill-outline-color': '#FF0000'
+            }
+        });
+    });
+
+    // Add a click event listener
+    map.on('click', 'province-boundaries', function(e) {
+        // Get the clicked feature
+        const features = map.queryRenderedFeatures(e.point, { layers: ['province-boundaries'] });
+        
+        if (features.length > 0) {
+            const feature = features[0];
+            const properties = feature.properties;
+            const info = `
+                <strong>Province:</strong> ${properties.PROVINSI || 'Unknown'}<br>
+                <strong>OBJECTID:</strong> ${properties.OBJECTID || 'N/A'}<br>
+                <strong>Shape Area:</strong> ${properties.Shape_Area || 'N/A'}<br>
+                <strong>Shape Length:</strong> ${properties.Shape_Leng || 'N/A'}
+            `;
+            document.getElementById('info').innerHTML = info;
+        }
+    });
+
+    // Change the cursor to a pointer when hovering over the provinces layer
+    map.on('mouseenter', 'province-boundaries', function() {
+        map.getCanvas().style.cursor = 'pointer';
+    });
+
+    map.on('mouseleave', 'province-boundaries', function() {
+        map.getCanvas().style.cursor = '';
+    });
+
+    // Add error handling
+    map.on('error', (e) => {
+        console.error('Map error:', e.error);
+    });
+</script>
+</body>
+</html>
