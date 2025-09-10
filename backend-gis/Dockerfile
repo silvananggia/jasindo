@@ -1,5 +1,5 @@
 # Use the official Node.js image
-FROM node:18
+FROM node:22
 
 # Install PostgreSQL client
 RUN apt-get update && apt-get install -y postgresql-client
