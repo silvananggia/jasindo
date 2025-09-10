@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  # Frontend GIS React App
+  gis-siap:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: gis_siap_frontend
+    environment:
+      REACT_APP_API_URL: http://localhost:8080/api
+      REACT_APP_MARTIN_URL: http://localhost:3111
+    ports:
+      - "3000:80"
+    networks:
+      gisnet:
+        aliases:
+          - frontend.docker
+    restart: unless-stopped
+
+
+networks:
+  gisnet:
+    external: true
