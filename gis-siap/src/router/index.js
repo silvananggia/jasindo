@@ -7,6 +7,9 @@ const MapRegister = lazy(() => import('../components/map/MapRegister'));
 const MapView = lazy(() => import('../components/map/MapView'));
 const MapKlaim = lazy(() => import('../components/map/MapClaim'));
 const MapAnalysis = lazy(() => import('../components/map/MapAnalytic'));
+const MapAnggota = lazy(() => import('../components/map/MapAnggota'));
+const MapAnggotaKlaim = lazy(() => import('../components/map/MapAnggotaKlaim'));
+
 
 function MyRouter() {
     return (
@@ -29,6 +32,16 @@ function MyRouter() {
             <Route path='/map-analisis' element={
                 <Suspense fallback={<Spinner className="content-loader" />}>
                     <MapAnalysis />
+                </Suspense>
+            } />
+            <Route path='/map-anggota' element={
+                <Suspense fallback={<Spinner className="content-loader" />}>
+                    <MapAnggota />
+                </Suspense>
+            } />
+            <Route path='/map-anggota-klaim' element={
+                <Suspense fallback={<Spinner className="content-loader" />}>
+                    <MapAnggotaKlaim />
                 </Suspense>
             } />
         </Routes>

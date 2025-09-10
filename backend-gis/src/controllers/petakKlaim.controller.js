@@ -80,15 +80,18 @@ exports.listPetakKlaim = async (req, res) => {
 
 exports.deletePetakKlaim = async (req, res) => {
   try {
-    const idpetak = req.params.id;
+    const klaimId = req.params.id;
+    console.log('deletePetakKlaim called with klaimId:', klaimId);
 
     // First check if the klaim exists
     const checkResult = await db.query(
-      `SELECT id, nik, nopolis, idpetak, luas FROM petak_klaim WHERE idpetak = $1`,
-      [idpetak]
+      `SELECT id, nik, nopolis, idpetak, luas FROM petak_klaim WHERE id = $1`,
+      [klaimId]
     );
+    console.log('checkResult rows:', checkResult.rows);
 
     if (checkResult.rows.length === 0) {
+      console.log('Klaim not found for id:', klaimId);
       return res.status(404).json({
         code: 404,
         status: "error",
@@ -98,9 +101,10 @@ exports.deletePetakKlaim = async (req, res) => {
 
     // Delete the klaim
     const deleteResult = await db.query(
-      `DELETE FROM petak_klaim WHERE idpetak = $1 RETURNING id, nik, nopolis, idpetak, luas`,
-      [idpetak]
+      `DELETE FROM petak_klaim WHERE id = $1 RETURNING id, nik, nopolis, idpetak, luas`,
+      [klaimId]
     );
+    console.log('deleteResult rows:', deleteResult.rows);
 
     res.json({
       code: 200,

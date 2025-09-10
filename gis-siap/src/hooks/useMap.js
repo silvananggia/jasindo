@@ -27,13 +27,25 @@ export const useMap = (isAuthenticated, googleApiKey, onPercilSelect, tileUrl) =
     }
 
     // Create initial polygon layer with empty source
-    polygonLayerRef.current = new VectorTileLayer({
-      source: new VectorTileSource({
-        format: new MVT(),
-        url: `${process.env.REACT_APP_TILE_URL}/${tileUrl}`,
-      }),
-      style: getPercilStyle([], [], false),
-    });
+    if (tileUrl && typeof tileUrl === 'string' && tileUrl.trim() !== '') {
+      polygonLayerRef.current = new VectorTileLayer({
+        source: new VectorTileSource({
+          format: new MVT(),
+          url: `${process.env.REACT_APP_TILE_URL}/${tileUrl}`,
+        }),
+        style: getPercilStyle([], [], false),
+      });
+    } else {
+      // Create a placeholder layer when tileUrl is not available
+      polygonLayerRef.current = new VectorTileLayer({
+        source: new VectorTileSource({
+          format: new MVT(),
+          url: '', // Empty URL to prevent 404 errors
+        }),
+        style: getPercilStyle([], [], false),
+        visible: false, // Hide the layer until proper URL is set
+      });
+    }
 
     mapInstance.current = new Map({
       target: mapRef.current,

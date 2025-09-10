@@ -52,7 +52,7 @@ function petakReducer(petak = initialstate, action) {
             return {
                 ...petak,
                 loading: false,
-                petaklist: action.payload.data,
+                petaklist: action.payload, // action.payload is already the API response object
 
             };
         case GET_PETAK_ID:

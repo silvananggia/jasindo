@@ -10,6 +10,14 @@ const getPetakUser = (id) => {
   return axios.get(`/petak-user/${id}`);
 };
 
+const getCenterPetakUser = (id) => {
+  return axios.get(`/center-petak-user/${id}`);
+};
+
+const getPetakById = (id) => {
+  return axios.get(`/petak-by-id/${id}`);
+};
+
 const getPetakID = (id) => {
     return axios.get(`/petakid/${id}`);
   };
@@ -33,6 +41,8 @@ const deletePetak = (id) => {
 const PetakService = {
     getPetakAll,
     getPetakUser,
+    getCenterPetakUser,
+    getPetakById,
     getPetakID,
     createPetak,
     updatePetak,

@@ -11,6 +11,8 @@ export const basemapOptions = [
 ];
 
 export const createBasemapLayer = (basemap, googleApiKey) => {
+  console.log('createBasemapLayer called with:', { basemap, hasApiKey: !!googleApiKey });
+  
   switch (basemap) {
     case "map-switch-default":
       return new TileLayer({
@@ -22,6 +24,13 @@ export const createBasemapLayer = (basemap, googleApiKey) => {
       });
 
     case "map-switch-basic":
+      if (!googleApiKey) {
+        console.warn('Google API key missing, falling back to OSM');
+        return new TileLayer({
+          title: "Basemap",
+          source: new OSM(),
+        });
+      }
       return new TileLayer({
         title: "Basemap",
         source: new XYZ({
@@ -40,6 +49,13 @@ export const createBasemapLayer = (basemap, googleApiKey) => {
       });
 
     case "map-switch-satellite":
+      if (!googleApiKey) {
+        console.warn('Google API key missing, falling back to OSM');
+        return new TileLayer({
+          title: "Basemap",
+          source: new OSM(),
+        });
+      }
       return new TileLayer({
         title: "Basemap",
         source: new XYZ({

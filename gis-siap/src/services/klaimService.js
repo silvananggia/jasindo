@@ -32,7 +32,10 @@ const updateKlaim = (id, data) => {
 };
 
 const deleteKlaim = (id) => {
-  return axios.delete(`/petak-klaim/${id}`, { headers: authHeader() });
+  console.log('klaimService.deleteKlaim called with id:', id);
+  const url = `/petak-klaim/${id}`;
+  console.log('klaimService.deleteKlaim URL:', url);
+  return axios.delete(url, { headers: authHeader() });
 };
 
 const KlaimService = {

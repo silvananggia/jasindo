@@ -192,7 +192,7 @@ exports.deletePetakUser = async (req, res) => {
 
     // First check if the petak exists
     const checkResult = await db.query(
-      `SELECT id, nik, idpetak, luas FROM petak_user WHERE idpetak = $1`,
+      `SELECT id, nik, idpetak, luas FROM petak_user WHERE id = $1`,
       [idpetak]
     );
 
@@ -206,7 +206,7 @@ exports.deletePetakUser = async (req, res) => {
 
     // Delete the petak
     const deleteResult = await db.query(
-      `DELETE FROM petak_user WHERE idpetak = $1 RETURNING id, nik, idpetak, luas`,
+      `DELETE FROM petak_user WHERE id = $1 RETURNING id, nik, idpetak, luas`,
       [idpetak]
     );
 
@@ -221,6 +221,122 @@ exports.deletePetakUser = async (req, res) => {
 
   } catch (error) {
     console.error("Error deleting petak:", error);
+    res.status(500).json({
+      code: 500,
+      status: "error",
+      data: "Internal Server Error",
+    });
+  }
+}
+
+exports.centerPetakUser = async (req, res) => {
+  try {
+    const nik = req.params.id;
+
+    // Get the center point and extent of all petak for the user
+    const result = await db.query(
+      `
+      SELECT 
+        ST_AsGeoJSON(ST_Centroid(ST_Collect(geometry)))::json AS center,
+        ST_AsGeoJSON(ST_Envelope(ST_Collect(geometry)))::json AS extent,
+        COUNT(*) AS petak_count,
+        SUM(luas) AS total_area
+      FROM petak_user
+      WHERE nik = $1
+      `,
+      [nik]
+    );
+
+    if (result.rows.length === 0 || result.rows[0].petak_count === '0') {
+      return res.status(404).json({
+        code: 404,
+        status: "error",
+        data: "No petak data found for this user",
+      });
+    }
+
+    const data = result.rows[0];
+    
+    res.json({
+      code: 200,
+      status: "success",
+      data: {
+        center: data.center,
+        extent: data.extent,
+        petak_count: parseInt(data.petak_count),
+        total_area: parseFloat(data.total_area),
+        bounds: {
+          minX: data.extent.coordinates[0][0][0],
+          minY: data.extent.coordinates[0][0][1],
+          maxX: data.extent.coordinates[0][2][0],
+          maxY: data.extent.coordinates[0][2][1]
+        }
+      },
+    });
+
+  } catch (error) {
+    console.error("Error getting petak center:", error);
+    res.status(500).json({
+      code: 500,
+      status: "error",
+      data: "Internal Server Error",
+    });
+  }
+};
+
+exports.getPetakById = async (req, res) => {
+  try {
+    const petakId = req.params.id;
+
+    // Get the exact petak by ID with geometry for precise zooming
+    const result = await db.query(
+      `
+      SELECT 
+        id,
+        idpetak,
+        nik,
+        luas,
+        ST_AsGeoJSON(ST_Transform(geometry, 4326))::json AS geometry,
+        ST_AsGeoJSON(ST_Centroid(ST_Transform(geometry, 4326)))::json AS center,
+        ST_AsGeoJSON(ST_Envelope(ST_Transform(geometry, 4326)))::json AS extent
+      FROM petak_user
+      WHERE id = $1
+      `,
+      [petakId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        code: 404,
+        status: "error",
+        data: "Petak not found",
+      });
+    }
+
+    const data = result.rows[0];
+    
+    res.json({
+      code: 200,
+      status: "success",
+      data: {
+        id: data.id,
+        idpetak: data.idpetak,
+        nik: data.nik,
+        luas: parseFloat(data.luas),
+        geometry: data.geometry,
+        center: data.center,
+        extent: data.extent,
+        bounds: {
+          minX: data.extent.coordinates[0][0][0],
+          minY: data.extent.coordinates[0][0][1],
+          maxX: data.extent.coordinates[0][2][0],
+          maxY: data.extent.coordinates[0][2][1]
+        }
+      },
+    });
+
+  } catch (error) {
+    console.error("Error getting petak by ID:", error);
     res.status(500).json({
       code: 500,
       status: "error",

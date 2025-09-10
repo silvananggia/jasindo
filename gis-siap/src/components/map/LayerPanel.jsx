@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Typography, Switch, Slider, Divider } from '@mui/material';
+import { Box, Typography, Switch, Slider, Divider, useTheme, useMediaQuery } from '@mui/material';
 import OpacityIcon from "@mui/icons-material/Opacity";
 import BasemapSwitcher from './BasemapSwitcher';
 
@@ -10,14 +10,25 @@ const LayerPanel = ({
   setPolygonOpacity,
   selectedBasemap,
   onBasemapChange,
+  isMobile,
+  isTablet,
 }) => {
+  const theme = useTheme();
+
   return (
     <Box>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, paddingTop: '20px' }}>
-        <Typography variant="caption">Layer Petak</Typography>
+      <Box sx={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        gap: isMobile ? 1 : 2, 
+        paddingTop: isMobile ? '15px' : '20px',
+        flexWrap: isMobile ? 'wrap' : 'nowrap'
+      }}>
+        <Typography variant={isMobile ? "body2" : "caption"}>Layer Petak</Typography>
         <Switch
           checked={isPolygonVisible}
           onChange={(e) => setIsPolygonVisible(e.target.checked)}
+          size={isMobile ? "small" : "medium"}
         />
         <Divider />
       </Box>
@@ -26,11 +37,12 @@ const LayerPanel = ({
         sx={{
           display: "flex",
           alignItems: "center",
-          gap: 2,
-          width: 300,
+          gap: isMobile ? 1 : 2,
+          width: isMobile ? '100%' : isTablet ? '280px' : '300px',
+          mb: 2,
         }}
       >
-        <OpacityIcon fontSize="small" />
+        <OpacityIcon fontSize={isMobile ? "small" : "medium"} />
         <Slider
           value={polygonOpacity}
           min={0}
@@ -40,6 +52,7 @@ const LayerPanel = ({
           valueLabelDisplay='auto'
           onChange={(e, value) => setPolygonOpacity(value)}
           sx={{ flexGrow: 1 }}
+          size={isMobile ? "small" : "medium"}
         />
       </Box>
 
@@ -48,6 +61,8 @@ const LayerPanel = ({
       <BasemapSwitcher
         selectedBasemap={selectedBasemap}
         onBasemapChange={onBasemapChange}
+        isMobile={isMobile}
+        isTablet={isTablet}
       />
     </Box>
   );

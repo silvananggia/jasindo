@@ -4,6 +4,9 @@ const crypto = require("crypto");
 const { promisify } = require('util');
 const axios = require("axios");
 
+// Get base URL from environment variable or use default
+const BASE_URL = process.env.BASE_URL || "http://localhost/newautp-siap-komersial";
+
 exports.checkAuth = async (req, res, next) => {
   const clientCookies = req.headers.cookie;
   if (!clientCookies) return res.status(401).json({ message: 'No session cookies found' });
@@ -11,7 +14,7 @@ exports.checkAuth = async (req, res, next) => {
   try {
     // console.log("Forwarding cookies:", req.headers.cookie);
 
-    const response = await axios.get('http://localhost/newautp/auth/check_session', {
+    const response = await axios.get(`${BASE_URL}/auth/check_session`, {
       headers: {
         Cookie: req.headers.cookie,
         'User-Agent': req.headers['user-agent'],

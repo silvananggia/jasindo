@@ -56,14 +56,20 @@ export const updateKlaim = (id, data) => async (dispatch) => {
 
 export const deleteKlaim = (id) => async (dispatch) => {
     try {
-        await KlaimService.deleteKlaim(id);
+        console.log('deleteKlaim action called with id:', id);
+        const response = await KlaimService.deleteKlaim(id);
+        console.log('deleteKlaim service response:', response);
 
         dispatch({
             type: DELETE_KLAIM,
             payload: { id },
         });
+        
+        console.log('deleteKlaim action completed successfully');
+        return Promise.resolve();
     } catch (err) {
-        console.log(err);
+        console.error('deleteKlaim action error:', err);
+        return Promise.reject(err);
     }
 };
 
@@ -75,8 +81,11 @@ export const getKlaimUser = (id, nopolis) => async (dispatch) => {
             type: GET_KLAIM_USER,
             payload: res.data,
         });
+        
+        return Promise.resolve(res.data);
     } catch (err) {
         console.log(err);
+        return Promise.reject(err);
     }
 };
 

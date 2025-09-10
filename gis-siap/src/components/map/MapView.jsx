@@ -273,6 +273,7 @@ const MapRegister = () => {
               polygonLayerRef={polygonLayerRef}
               listPetak={listPetak}
               source="MapView"
+              mapInstance={mapInstance}
             />
           )}
 

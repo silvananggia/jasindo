@@ -71,14 +71,45 @@ export const deletePetak = (id) => async (dispatch) => {
 
 export const getPetakUser = (id) => async (dispatch) => {
     try {
+        // Guard: avoid calling API with empty/invalid id
+        if (!id || (typeof id === 'string' && id.trim() === '')) {
+            dispatch({
+                type: GET_PETAK_USER,
+                payload: [],
+            });
+            return Promise.resolve({ code: 200, status: 'skipped', data: [] });
+        }
         const res = await PetakService.getPetakUser(id);
      
         dispatch({
             type: GET_PETAK_USER,
-            payload: res.data,
+            payload: res.data.data || [], // Extract the actual array from the API response
         });
+        
+        return Promise.resolve(res.data);
     } catch (err) {
         console.log(err);
+        return Promise.reject(err);
+    }
+};
+
+export const getCenterPetakUser = (id) => async (dispatch) => {
+    try {
+        const res = await PetakService.getCenterPetakUser(id);
+        return Promise.resolve(res.data);
+    } catch (err) {
+        console.log(err);
+        return Promise.reject(err);
+    }
+};
+
+export const getPetakById = (id) => async (dispatch) => {
+    try {
+        const res = await PetakService.getPetakById(id);
+        return Promise.resolve(res.data);
+    } catch (err) {
+        console.log(err);
+        return Promise.reject(err);
     }
 };
 

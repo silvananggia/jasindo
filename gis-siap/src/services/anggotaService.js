@@ -1,7 +1,7 @@
 import axios from "../api/axios";
 
-const getAnggota = (id) => {
-  return axios.get(`/get-anggota/${id}`);
+const getAnggota = (idkelompok) => {
+  return axios.get(`/get-anggota/${idkelompok}`);
 };
 
 const getAnggotaKlaim = (idkelompok,idklaim) => {

@@ -271,9 +271,12 @@ const MapRegister = () => {
 
   const handleDeleteKlaim = async (klaimId) => {
     try {
+      console.log('MapClaim.handleDeleteKlaim called with klaimId:', klaimId);
       await dispatch(deleteKlaim(klaimId));
+      console.log('MapClaim.handleDeleteKlaim: deleteKlaim completed');
       // Refresh the klaim list after deletion
       await dispatch(getKlaimUser(formData.nik, formData.noPolis));
+      console.log('MapClaim.handleDeleteKlaim: getKlaimUser completed');
     } catch (error) {
       console.error("Error deleting klaim:", error);
       throw error; // Re-throw to be handled by the DataPanel
@@ -360,6 +363,7 @@ const MapRegister = () => {
               source="MapClaim"
               isLoading={klaimLoading}
               onDeletePetak={handleDeleteKlaim}
+              mapInstance={mapInstance}
             />
           )}
 

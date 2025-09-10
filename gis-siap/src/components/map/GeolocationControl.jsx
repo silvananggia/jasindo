@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import Geolocation from 'ol/Geolocation';
 import GeolocationButton from 'ol-ext/control/GeolocationButton';
 
-const GeolocationControl = ({ mapInstance }) => {
+const GeolocationControl = ({ mapInstance, isMobile }) => {
   const geolocation = useRef(null);
 
   useEffect(() => {
@@ -22,6 +22,8 @@ const GeolocationControl = ({ mapInstance }) => {
       tipLabel: 'Get Location',
     });
 
+    
+
     mapInstance.addControl(geoControl);
 
     return () => {
@@ -29,7 +31,7 @@ const GeolocationControl = ({ mapInstance }) => {
         geolocation.current = null;
       }
     };
-  }, [mapInstance]);
+  }, [mapInstance, isMobile]);
 
   return null;
 };

@@ -43,11 +43,11 @@ const DataPanel = ({
 
   // Fetch default list when component mounts
   useEffect(() => {
-    if (formData.idkelompok && formData.noPolis) {
-      dispatch(getAnggota(formData.idkelompok));
+    if (formData.idKelompok && formData.noPolis) {
+      dispatch(getAnggota(formData.idKelompok));
       console.log("KlaimPanel - anggotalist:", anggotalist);
     }
-  }, [dispatch, formData.idkelompok, formData.noPolis]);
+  }, [dispatch, formData.idKelompok, formData.noPolis]);
 
   // Debug effect to log anggotalist changes
   useEffect(() => {

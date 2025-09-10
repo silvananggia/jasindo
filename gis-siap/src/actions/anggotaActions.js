@@ -9,6 +9,7 @@ import AnggotaService from "../services/anggotaService";
 export const getAnggota = (id) => async (dispatch) => {
     try {
         const res = await AnggotaService.getAnggota(id);
+        console.log("getAnggota - res:", res.data);
         dispatch({
             type: GET_ANGGOTA,
             payload: res.data,
@@ -22,14 +23,13 @@ export const getAnggota = (id) => async (dispatch) => {
 export const getAnggotaKlaim = (idkelompok,idklaim) => async (dispatch) => {
     try {
         const res = await AnggotaService.getAnggotaKlaim(idkelompok,idklaim);
-
-        //console.log(res.data);
+        
         dispatch({
             type: GET_ANGGOTA_KLAIM,
             payload: res.data,
         });
         
     } catch (err) {
-        console.log(err);
+        console.error('Error in getAnggotaKlaim:', err);
     }
 };

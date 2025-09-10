@@ -45,7 +45,7 @@ function petakReducer(petak = initialstate, action) {
             return {
                 ...petak,
                 loading: false,
-                klaimlist: petak.klaimlist.filter(k => k.idklaim !== payload.id),
+                klaimlist: petak.klaimlist.filter(k => k.id !== payload.id),
             };
         case GET_KLAIM_USER:
             return {
