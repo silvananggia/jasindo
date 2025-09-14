@@ -19,14 +19,14 @@ import { useURLParams } from '../../hooks/useURLParams';
 import { createBasemapLayer } from '../../utils/mapUtils';
 import { handleSearch } from '../../utils/mapUtils';
 import { getPercilStyle } from '../../utils/percilStyles';
-import { createKlaim, getKlaimID, deleteKlaim, getKlaimUser } from '../../actions/klaimActions';
+import { getKlaimUser, deleteKlaim } from '../../actions/klaimActions';
 import BasemapSwitcher from './BasemapSwitcher';
 import GeolocationControl from './GeolocationControl';
 import Spinner from '../Spinner/Loading-spinner';
 import DataPanel from './DataPanel';
 import LayerPanel from './LayerPanel';
 
-const MapRegister = () => {
+const MapViewClaim = () => {
   
   const dispatch = useDispatch();
   const isAuthenticated = useSelector((state) => state.auth.isAuthenticated);
@@ -48,10 +48,33 @@ const MapRegister = () => {
   const [alertOpen, setAlertOpen] = useState(false);
   const [alertMessage, setAlertMessage] = useState('');
   const [tileUrl, setTileUrl] = useState();
+  const [isGoogleMapsLoaded, setIsGoogleMapsLoaded] = useState(false);
+
+  // Check if Google Maps API is loaded
+  useEffect(() => {
+    let attempts = 0;
+    const maxAttempts = 50; // 5 seconds max
+    
+    const checkGoogleMaps = () => {
+      attempts++;
+      if (window.google && window.google.maps && window.google.maps.places) {
+        setIsGoogleMapsLoaded(true);
+      } else if (attempts < maxAttempts) {
+        // Retry after a short delay
+        setTimeout(checkGoogleMaps, 100);
+      } else {
+        console.warn('Google Maps API failed to load after 5 seconds');
+        // Still set to true to show the input field without autocomplete
+        setIsGoogleMapsLoaded(true);
+      }
+    };
+    
+    checkGoogleMaps();
+  }, []);
 
   // Function to simulate iframe message
   const handleSimulateIframeMessage = () => {
-    console.log("MapRegister - Simulating iframe message");
+    console.log("MapViewClaim - Simulating iframe message");
     
     const testMessage = {
       nik: '320328-021093-0003',
@@ -62,7 +85,7 @@ const MapRegister = () => {
       noPolis: '423.266.110.25.2/100/000'
     };
     
-    console.log("MapRegister - Sending test message:", testMessage);
+    console.log("MapViewClaim - Sending test message:", testMessage);
     
     // Simulate the iframe message
     const event = new MessageEvent('message', {
@@ -76,36 +99,10 @@ const MapRegister = () => {
 
   const handlePercilSelect = useCallback(async (percilData) => {
     try {
-      // Check if user has already reached the maximum number of petak allowed
-      const totalRegisteredKlaim = (listKlaim || []).length;
-      const totalSelectedPetak = selectedPercils.length;
-      const totalPetak = totalRegisteredKlaim + totalSelectedPetak;
-      
-    /*   if (totalPetak >= formData.jmlPetak) {
-        setAlertMessage(`Tidak dapat menambah petak lagi. Total petak (terdaftar: ${totalRegisteredKlaim} + terpilih: ${totalSelectedPetak} = ${totalPetak}) sudah mencapai batas maksimum (${formData.jmlPetak})`);
-        setAlertOpen(true);
-        return;
-      } */
-
-      const idPetak = await dispatch(getKlaimID(percilData.id));
-      if (Array.isArray(idPetak) && idPetak.length > 0) {
-        setAlertMessage(`Tidak Dapat Dipilih, Lahan ini sudah didaftarkan sebelumnya`);
-        setAlertOpen(true);
-        return;
-      }
-
-      setSelectedPercils((prev) => {
-        const exists = prev.find((p) => p.id === percilData.id);
-        const updated = exists
-          ? prev.filter((p) => p.id !== percilData.id)
-          : [...prev, percilData];
-
-        if (polygonLayerRef.current) {
-          polygonLayerRef.current.setStyle(getPercilStyle(updated));
-          polygonLayerRef.current.changed();
-        }
-        return updated;
-      });
+      // For view-only mode, we don't allow selection
+      setAlertMessage(`Mode tampilan - tidak dapat memilih lahan`);
+      setAlertOpen(true);
+      return;
     } catch (err) {
       console.error('Error processing feature:', err);
       Swal.fire({
@@ -114,7 +111,7 @@ const MapRegister = () => {
         text: 'An error occurred while processing.',
       });
     }
-  }, [dispatch, listKlaim, selectedPercils, formData.jmlPetak]);
+  }, []);
 
   const { mapRef, mapInstance, polygonLayerRef, basemapLayerRef } = useMap(
     isAuthenticated,
@@ -125,23 +122,23 @@ const MapRegister = () => {
 
   useEffect(() => {
     const handleMessage = (e) => {
-      console.log("MapRegister - Received message:", e.data);
-      console.log("MapRegister - Message origin:", e.origin);
+      console.log("MapViewClaim - Received message:", e.data);
+      console.log("MapViewClaim - Message origin:", e.origin);
       
       if (e.data && e.data.nik) {
-        console.log("MapRegister - Valid message received, updating formData with:", e.data);
+        console.log("MapViewClaim - Valid message received, updating formData with:", e.data);
         setFormData(e.data);
         setSearchInput(e.data.address);
-        console.log("MapRegister - formData and searchInput updated");
+        console.log("MapViewClaim - formData and searchInput updated");
         
         setTimeout(() => {
           if (mapInstance.current) {
-            console.log("MapRegister - Triggering search for address:", e.data.address);
+            console.log("MapViewClaim - Triggering search for address:", e.data.address);
             handleSearch(e.data.address, mapInstance.current, process.env.REACT_APP_GOOGLE_API_KEY);
           }
         }, 1000);
       } else {
-        console.log("MapRegister - Invalid message format:", e.data);
+        console.log("MapViewClaim - Invalid message format:", e.data);
       }
     };
 
@@ -155,30 +152,6 @@ const MapRegister = () => {
       0
     ));
   }, [selectedPercils]);
-
-  useEffect(() => {
-    const totalRegisteredKlaim = (listKlaim || []).length;
-    const totalSelectedPetak = selectedPercils.length;
-    const totalPetak = totalRegisteredKlaim + totalSelectedPetak;
-    
-    if (totalPetak > formData.jmlPetak) {
-      setAlertMessage(`Total petak (terdaftar: ${totalRegisteredKlaim} + terpilih: ${totalSelectedPetak} = ${totalPetak}) tidak dapat lebih dari ${formData.jmlPetak}`);
-      setAlertOpen(true);
-      setIsValid(false);
-      return;
-    }
-
-    const luasLahanFloat = parseFloat(formData.luasLahan);
-    const areaLimit = luasLahanFloat + (luasLahanFloat * 0.25);
-    
-    if (totalArea > areaLimit) {
-      setAlertMessage(`Total area terpilih (${totalArea.toFixed(2)} ha), batas toleransi yang diizinkan (${areaLimit.toFixed(2)} ha)`);
-      setAlertOpen(true);
-      setIsValid(false);
-    } else {
-      setIsValid(true);
-    }
-  }, [selectedPercils, totalArea, formData.jmlPetak, formData.luasLahan, listKlaim]);
 
   useEffect(() => {
     if (polygonLayerRef.current) {
@@ -200,24 +173,16 @@ const MapRegister = () => {
     
     const currentListKlaim = listKlaim || [];
     const lockedIDs = currentListKlaim.map(p => p.idpetak);
-    const totalRegisteredKlaim = currentListKlaim.length;
-    const totalSelectedPetak = selectedPercils.length;
-    const totalPetak = totalRegisteredKlaim + totalSelectedPetak;
-    const isLimitReached = totalPetak >= formData.jmlPetak;
     
-    polygonLayerRef.current.setStyle(getPercilStyle(selectedPercils, lockedIDs, isLimitReached));
+    polygonLayerRef.current.setStyle(getPercilStyle([], lockedIDs, false, true)); // View-only mode
     polygonLayerRef.current.changed();
     
-    // Update cursor style based on limit
+    // Update cursor style for view-only mode
     if (mapInstance.current) {
       const mapElement = mapInstance.current.getViewport();
-      if (isLimitReached) {
-        mapElement.style.cursor = 'not-allowed';
-      } else {
-        mapElement.style.cursor = 'pointer';
-      }
+      mapElement.style.cursor = 'default';
     }
-  }, [selectedPercils, listKlaim, formData.jmlPetak, mapInstance]);
+  }, [listKlaim, mapInstance]);
 
   const handleTabChange = (event, newValue) => {
     setTabValue(newValue);
@@ -235,47 +200,14 @@ const MapRegister = () => {
     }
   };
 
-  const handleSimpan = async () => {
-    const payload = selectedPercils.map(p => ({
-      nik: formData.nik,
-      nopolis: formData.noPolis,
-      idpetak: p.id,
-      luas: p.area,
-      geometry: p.geometry,
-    }));
-
-    try {
-      await dispatch(createKlaim(payload));
-      
-      // Clear selected petak after successful save
-      setSelectedPercils([]);
-      
-      // Refresh the klaim list to show newly saved klaim in "Lahan Terdaftar"
-      await dispatch(getKlaimUser(formData.nik, formData.noPolis));
-      
-      Swal.fire({
-        icon: "success",
-        title: "Success",
-        text: "Data Berhasil Disimpan.",
-      });
-    } catch (error) {
-      console.error("Error:", error);
-      Swal.fire({
-        icon: "error",
-        title: "Error",
-        text: "Gagal Menyimpan Data.",
-      });
-    }
-  };
-
   const handleDeleteKlaim = async (klaimId) => {
     try {
-      console.log('MapClaim.handleDeleteKlaim called with klaimId:', klaimId);
+      console.log('MapViewClaim.handleDeleteKlaim called with klaimId:', klaimId);
       await dispatch(deleteKlaim(klaimId));
-      console.log('MapClaim.handleDeleteKlaim: deleteKlaim completed');
+      console.log('MapViewClaim.handleDeleteKlaim: deleteKlaim completed');
       // Refresh the klaim list after deletion
       await dispatch(getKlaimUser(formData.nik, formData.noPolis));
-      console.log('MapClaim.handleDeleteKlaim: getKlaimUser completed');
+      console.log('MapViewClaim.handleDeleteKlaim: getKlaimUser completed');
     } catch (error) {
       console.error("Error deleting klaim:", error);
       throw error; // Re-throw to be handled by the DataPanel
@@ -356,10 +288,10 @@ const MapRegister = () => {
               setSelectedPercils={setSelectedPercils}
               totalArea={totalArea}
               isValid={isValid}
-              onSave={handleSimpan}
+              onSave={() => {}} // No save functionality in view mode
               polygonLayerRef={polygonLayerRef}
               listPetak={listKlaim}
-              source="MapClaim"
+              source="MapViewClaim"
               isLoading={klaimLoading}
               onDeletePetak={handleDeleteKlaim}
               mapInstance={mapInstance}
@@ -400,15 +332,32 @@ const MapRegister = () => {
           gap: '8px',
         }}
       >
-        <Autocomplete
-          onLoad={(autocompleteInstance) => setAutocomplete(autocompleteInstance)}
-          onPlaceChanged={handlePlaceChange}
-        >
+        {isGoogleMapsLoaded ? (
+          <Autocomplete
+            onLoad={(autocompleteInstance) => setAutocomplete(autocompleteInstance)}
+            onPlaceChanged={handlePlaceChange}
+          >
+            <input
+              type="text"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Cari alamat"
+              style={{
+                flex: 1,
+                padding: '10px 15px',
+                borderRadius: '5px',
+                border: '1px solid #ccc',
+                outline: 'none',
+                width: '250px',
+              }}
+            />
+          </Autocomplete>
+        ) : (
           <input
             type="text"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="Cari alamat"
+            placeholder="Cari alamat (Loading...)"
             style={{
               flex: 1,
               padding: '10px 15px',
@@ -418,7 +367,7 @@ const MapRegister = () => {
               width: '250px',
             }}
           />
-        </Autocomplete>
+        )}
         <IconButton
           onClick={() => handleSearch(searchInput, mapInstance.current, process.env.REACT_APP_GOOGLE_API_KEY)}
           style={{
@@ -452,4 +401,4 @@ const MapRegister = () => {
   );
 };
 
-export default MapRegister; 
+export default MapViewClaim;

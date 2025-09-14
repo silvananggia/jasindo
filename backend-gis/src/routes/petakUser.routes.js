@@ -10,6 +10,7 @@ router.get('/list-point-petak-user/:id', petakUserController.listPointPetakUser)
 router.get('/petakid/:id', petakUserController.petakId)
 router.get('/center-petak-user/:id', petakUserController.centerPetakUser)
 router.get('/petak-by-id/:id', petakUserController.getPetakById)
+router.get('/petak-by-idpetak/:id', petakUserController.getPetakByIdPetak)
 router.delete('/petak/:id', petakUserController.deletePetakUser)
 
 module.exports = router;

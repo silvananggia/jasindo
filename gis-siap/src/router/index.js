@@ -8,7 +8,9 @@ const MapView = lazy(() => import('../components/map/MapView'));
 const MapKlaim = lazy(() => import('../components/map/MapClaim'));
 const MapAnalysis = lazy(() => import('../components/map/MapAnalytic'));
 const MapAnggota = lazy(() => import('../components/map/MapAnggota'));
+const MapAnggotaDisetujui = lazy(() => import('../components/map/MapAnggotaDisetujui'));
 const MapAnggotaKlaim = lazy(() => import('../components/map/MapAnggotaKlaim'));
+const MapViewClaim = lazy(() => import('../components/map/MapViewClaim'));
 
 
 function MyRouter() {
@@ -39,9 +41,19 @@ function MyRouter() {
                     <MapAnggota />
                 </Suspense>
             } />
+            <Route path='/map-anggota-disetujui' element={
+                <Suspense fallback={<Spinner className="content-loader" />}>
+                    <MapAnggotaDisetujui />
+                </Suspense>
+            } />
             <Route path='/map-anggota-klaim' element={
                 <Suspense fallback={<Spinner className="content-loader" />}>
                     <MapAnggotaKlaim />
+                </Suspense>
+            } />
+            <Route path='/map-view-klaim' element={
+                <Suspense fallback={<Spinner className="content-loader" />}>
+                    <MapViewClaim />
                 </Suspense>
             } />
         </Routes>

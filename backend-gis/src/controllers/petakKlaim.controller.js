@@ -153,3 +153,62 @@ exports.klaimId = async (req, res) => {
     });
   }
 };
+
+exports.getPetakKlaimID = async (req, res) => {
+  try {
+    const id = req.params.id;
+
+    const result = await db.query(
+      `
+      SELECT 
+        petak_klaim.id,
+        petak_klaim.idpetak,
+        petak_klaim.luas,
+        ST_AsGeoJSON(ST_Transform(petak_klaim.geometry, 4326))::json AS geometry,
+        ST_AsGeoJSON(ST_Centroid(ST_Transform(petak_klaim.geometry, 4326)))::json AS center,
+        ST_AsGeoJSON(ST_Envelope(ST_Transform(petak_klaim.geometry, 4326)))::json AS extent
+      FROM petak_klaim
+      WHERE petak_klaim.idpetak=$1
+      `,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.json({
+        code: 200,
+        status: "success",
+        data: [],
+      });
+    }
+
+    // Process the data to include center and bounds information
+    const processedData = result.rows.map(row => ({
+      id: row.id,
+      idpetak: row.idpetak,
+      luas: parseFloat(row.luas),
+      geometry: row.geometry,
+      center: row.center,
+      extent: row.extent,
+      bounds: {
+        minX: row.extent.coordinates[0][0][0],
+        minY: row.extent.coordinates[0][0][1],
+        maxX: row.extent.coordinates[0][2][0],
+        maxY: row.extent.coordinates[0][2][1]
+      }
+    }));
+
+    res.json({
+      code: 200,
+      status: "success",
+      data: processedData,
+    });
+
+  } catch (error) {
+    console.error("Error executing query", error);
+    res.status(500).json({
+      code: 500,
+      status: "error",
+      data: "Internal Server Error",
+    });
+  }
+};

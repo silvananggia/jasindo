@@ -1,5 +1,6 @@
 import {
     GET_ANGGOTA,
+    GET_ANGGOTA_DISETUJUI,
     GET_ANGGOTA_KLAIM,
 } from "../actions/types";
 
@@ -15,6 +16,13 @@ function anggotaReducer(anggota = initialstate, action) {
 
     switch (type) {
         case GET_ANGGOTA:
+            return {
+                ...anggota,
+                loading: false,
+                anggotalist: action.payload,
+            };
+
+        case GET_ANGGOTA_DISETUJUI:
             return {
                 ...anggota,
                 loading: false,

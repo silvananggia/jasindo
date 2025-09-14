@@ -25,7 +25,7 @@ import { getPercilStyle } from '../../utils/percilStyles';
 import { Style, Stroke, Fill } from 'ol/style';
 import { fromLonLat } from 'ol/proj';
 import { buffer } from 'ol/extent';
-import { getPetakById } from '../../actions/petakActions';
+import { getPetakById, getPetakByIdPetak, getPetakKlaimID } from '../../actions/petakActions';
 import { useDispatch } from 'react-redux';
 import Swal from 'sweetalert2';
 
@@ -135,23 +135,40 @@ const DataPanel = ({
     }
 
     try {
-      // Find the petak data to get the database ID
-      const petakData = listPetak?.find(p => p.idpetak === petakId || p.id === petakId);
-      
-      if (!petakData) {
-        console.warn('Petak data not found for ID:', petakId);
-        return;
-      }
+      let exactPetakData;
 
-      // Use the database ID to get exact petak data with geometry
-      const dbId = petakData.id;
-      if (!dbId) {
-        console.warn('Database ID not found for petak:', petakId);
-        return;
-      }
+      if (source === 'MapViewClaim' || source === 'MapClaim') {
+        // For other sources, find the petak data to get the database ID
 
-      // Call the new API to get exact petak data
-      const exactPetakData = await dispatch(getPetakById(dbId));
+        const petakData = listPetak?.find(p => p.idpetak === petakId );
+       
+        if (!petakData) {
+          console.warn('Petak data not found for ID:', petakId);
+          return;
+        }
+        exactPetakData = await dispatch(getPetakById(petakData.idpuser));
+      } else {
+        // For other sources, find the petak data to get the database ID
+        const petakData = listPetak?.find(p => p.idpetak === petakId || p.id === petakId);
+        
+        if (!petakData) {
+          console.warn('Petak data not found for ID:', petakId);
+          return;
+        }
+
+        // Use the database ID to get exact petak data with geometry
+        const dbId = petakData.id;
+        if (!dbId) {
+          console.warn('Database ID not found for petak:', petakId);
+          return;
+        }
+
+        // Call the API to get exact petak data
+        console.log('Getting exact petak data for ID:', dbId);
+        console.log('source:', source);
+        exactPetakData = await dispatch(getPetakById(dbId));
+        console.log('end')
+      }
       
       if (exactPetakData && exactPetakData.data) {
         const { center, bounds } = exactPetakData.data;

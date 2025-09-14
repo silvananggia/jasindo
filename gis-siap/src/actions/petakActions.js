@@ -2,6 +2,7 @@ import {
     CREATE_PETAK,
     GET_PETAK,
     GET_PETAK_ID,
+    GET_PETAK_KLAIM_ID,
     GET_PETAK_USER,
     UPDATE_PETAK,
     DELETE_PETAK,
@@ -113,6 +114,16 @@ export const getPetakById = (id) => async (dispatch) => {
     }
 };
 
+export const getPetakByIdPetak = (idpetak) => async (dispatch) => {
+    try {
+        const res = await PetakService.getPetakByIdPetak(idpetak);
+        return Promise.resolve(res.data);
+    } catch (err) {
+        console.log(err);
+        return Promise.reject(err);
+    }
+};
+
 
 export const getPetakID = (id) => async (dispatch) => {
     try {
@@ -121,6 +132,20 @@ export const getPetakID = (id) => async (dispatch) => {
         //console.log(res.data);
         dispatch({
             type: GET_PETAK_ID,
+            payload: res.data.data,
+        });
+        return res.data.data; 
+    } catch (err) {
+        console.log(err);
+    }
+};
+
+export const getPetakKlaimID = (id) => async (dispatch) => {
+    try {
+        const res = await PetakService.getPetakKlaimID(id);
+
+        dispatch({
+            type: GET_PETAK_KLAIM_ID,
             payload: res.data.data,
         });
         return res.data.data; 

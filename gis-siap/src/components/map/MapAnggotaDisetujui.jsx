@@ -26,7 +26,7 @@ import { createBasemapLayer } from "../../utils/mapUtils";
 import { handleSearch } from "../../utils/mapUtils";
 import { getPercilStyle } from "../../utils/percilStyles";
 import { createPetak, getPetakID, getPetakUser, getCenterPetakUser } from "../../actions/petakActions";
-import { getAnggota, getAnggotaDisetujui } from "../../actions/anggotaActions";
+import { getAnggotaDisetujui } from "../../actions/anggotaActions";
 import { getKlaimUser } from "../../actions/klaimActions";
 import BasemapSwitcher from "./BasemapSwitcher";
 import GeolocationControl from "./GeolocationControl";
@@ -271,7 +271,7 @@ const MapAnalytic = () => {
     if (formData && formData.idKelompok) {
       console.log('formData:', formData);
       console.log('formData.idKelompok:', formData.idKelompok);
-      dispatch(getAnggota(formData.idKelompok));
+      dispatch(getAnggotaDisetujui(formData.idKelompok));
     }
   },[formData.idKelompok]);
   // Update polygon layer when formData changes
@@ -539,7 +539,9 @@ const MapAnalytic = () => {
           // Use the new center petak API for precise zooming
           const performPreciseZoom = async () => {
             try {
+              console.log('Getting center petak data for NIK:', anggota.NIK);
               const centerData = await dispatch(getCenterPetakUser(anggota.NIK));
+              console.log('Center petak data:', centerData);
               
               if (centerData && centerData.data) {
                 const { center, bounds } = centerData.data;
@@ -556,6 +558,7 @@ const MapAnalytic = () => {
                   fromLonLat([bounds.maxX, bounds.maxY])[1]  // maxY
                 ];
                 
+                console.log('Calculated extent:', extent);
                 
                 // Add small buffer for better view
                 const bufferedExtent = buffer(extent, 50); // 50 meter buffer
@@ -566,6 +569,7 @@ const MapAnalytic = () => {
                   maxZoom: 22
                 });
                 
+                console.log('Zoomed to petak extent successfully');
                 return true;
               }
             } catch (error) {

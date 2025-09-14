@@ -26,7 +26,7 @@ import { useURLParams } from "../../hooks/useURLParams";
 import { createBasemapLayer } from "../../utils/mapUtils";
 import { handleSearch } from "../../utils/mapUtils";
 import { getPercilStyle } from "../../utils/percilStyles";
-import { createPetak, getPetakID, getPetakUser } from "../../actions/petakActions";
+import { createPetak, getPetakID, getPetakUser, getCenterPetakUser } from "../../actions/petakActions";
 import { getAnggotaKlaim } from "../../actions/anggotaActions";
 import { getKlaimUser } from "../../actions/klaimActions";
 import BasemapSwitcher from "./BasemapSwitcher";
@@ -65,9 +65,10 @@ const MapAnggotaKlaim = () => {
   const datesContainerRef = useRef(null);
   
   // New state for petak view functionality
-  const [analyticsPanelOpen, setAnalyticsPanelOpen] = useState(true);
+  const [analyticsPanelOpen, setAnalyticsPanelOpen] = useState(false);
   const [selectedAnggota, setSelectedAnggota] = useState(null);
   const [petakLayerVisible, setPetakLayerVisible] = useState(false);
+  const [loadingPetakData, setLoadingPetakData] = useState(false);
   
   // New state for anggota navigation
   const [currentAnggotaIndex, setCurrentAnggotaIndex] = useState(0);
@@ -114,7 +115,6 @@ const MapAnggotaKlaim = () => {
           }
         });
       } catch (err) {
-        console.error("Error processing feature:", err);
         Swal.fire({
           icon: "error",
           title: "Error",
@@ -225,7 +225,6 @@ const MapAnggotaKlaim = () => {
         text: "Data Berhasil Disimpan.",
       });
     } catch (error) {
-      console.error("Error:", error);
       Swal.fire({
         icon: "error",
         title: "Error",
@@ -334,6 +333,11 @@ const MapAnggotaKlaim = () => {
 
   // Handler functions for petak view and analytics
   const handleViewPetak = async (anggota) => {
+    // Prevent multiple clicks while loading
+    if (loadingPetakData) {
+      return;
+    }
+
     if (selectedAnggota?.Nik === anggota.Nik && petakLayerVisible) {
       // If clicking the same anggota and layer is visible, hide it
       setPetakLayerVisible(false);
@@ -345,11 +349,13 @@ const MapAnggotaKlaim = () => {
     } else {
       // Show layer for new anggota or if layer is hidden
       setSelectedAnggota(anggota);
+      setLoadingPetakData(true);
+      
       try {
-        await dispatch(getPetakUser(anggota.Nik));
+        const result = await dispatch(getPetakUser(anggota.Nik));
         
-        // Check if petak data exists
-        if (!petaklist || petaklist.length === 0) {
+        // Check if petak data exists using the result directly, not the state
+        if (!result || !result.data || result.data.length === 0) {
           // Mark this anggota as having no petak data
           setAnggotaPetakStatus(prev => ({ ...prev, [anggota.Nik]: false }));
           
@@ -375,44 +381,58 @@ const MapAnggotaKlaim = () => {
             url: `${process.env.REACT_APP_TILE_URL}/${newTileUrl}`,
           });
           
-          // Add event listener for when tiles are loaded
-          const handleTileLoad = () => {
-            // Try to zoom to the data extent
-            try {
-              const extent = newSource.getExtent();
-              if (extent && extent[0] !== Infinity && extent[1] !== Infinity && 
-                  extent[2] !== Infinity && extent[3] !== Infinity) {
-                const view = mapInstance.current.getView();
-                const bufferedExtent = buffer(extent, 50); // Add 50 meter buffer
-                view.fit(bufferedExtent, {
-                  duration: 1000,
-                  padding: [50, 50, 50, 50]
-                });
-              } else {
-                // Fallback: zoom to a reasonable level
-                const view = mapInstance.current.getView();
-                view.animate({
-                  zoom: 18,
-                  duration: 1000
-                });
-              }
-            } catch (error) {
-              console.log('Could not zoom to extent, using fallback zoom');
-              const view = mapInstance.current.getView();
-              view.animate({
-                zoom: 18,
-                duration: 1000
-              });
-            }
-            // Remove the event listener after first load
-            newSource.un('tileloadend', handleTileLoad);
-          };
-          
-          newSource.on('tileloadend', handleTileLoad);
-          
+          // Set up the layer first
           polygonLayerRef.current.setSource(newSource);
           polygonLayerRef.current.setVisible(true);
           polygonLayerRef.current.changed();
+          
+          // Use the new center petak API for precise zooming
+          const performPreciseZoom = async () => {
+            try {
+              const centerData = await dispatch(getCenterPetakUser(anggota.Nik));
+              
+              if (centerData && centerData.data) {
+                const { center, bounds } = centerData.data;
+                const view = mapInstance.current.getView();
+                
+                // Convert center coordinates to map projection
+                const centerCoords = fromLonLat([center.coordinates[0], center.coordinates[1]]);
+                
+                // Calculate extent from bounds
+                const extent = [
+                  fromLonLat([bounds.minX, bounds.minY])[0], // minX
+                  fromLonLat([bounds.minX, bounds.minY])[1], // minY
+                  fromLonLat([bounds.maxX, bounds.maxY])[0], // maxX
+                  fromLonLat([bounds.maxX, bounds.maxY])[1]  // maxY
+                ];
+                
+                
+                // Add small buffer for better view
+                const bufferedExtent = buffer(extent, 50); // 50 meter buffer
+                
+                view.fit(bufferedExtent, {
+                  duration: 2000,
+                  padding: [20, 20, 20, 20],
+                  maxZoom: 22
+                });
+                
+                return true;
+              }
+            } catch (error) {
+              console.log('Center petak API failed, using fallback:', error);
+            }
+            
+            // Fallback: Use high zoom level
+            const view = mapInstance.current.getView();
+            view.animate({
+              zoom: 20,
+              duration: 2000
+            });
+            return false;
+          };
+          
+          // Perform precise zoom
+          performPreciseZoom();
         }
       } catch (error) {
         console.error("Error fetching petak data:", error);
@@ -426,6 +446,8 @@ const MapAnggotaKlaim = () => {
           text: "Gagal mengambil data petak.",
         });
         setSelectedAnggota(null);
+      } finally {
+        setLoadingPetakData(false);
       }
     }
   };
@@ -458,26 +480,7 @@ const MapAnggotaKlaim = () => {
     setSelectedAnggota(null);
   };
 
-  // State to track which anggotas have petak data
-  const [anggotaPetakStatus, setAnggotaPetakStatus] = useState({});
-
-  // Helper function to check if petak data exists for an anggota
-  const hasPetakData = (anggota) => {
-    const status = anggotaPetakStatus[anggota.Nik];
-    // If status is undefined, we haven't checked yet, so allow the button to be enabled
-    // If status is false, we know there's no data, so disable the button
-    // If status is true, we know there's data, so enable the button
-    return status !== false;
-  };
-
   // Panel handlers - simplified with react-rnd
-  const [panelState, setPanelState] = useState({
-    x: window.innerWidth - 300, // Position on the right side
-    y: 15,
-    width: 280,
-    height: window.innerHeight * 0.75,
-  });
-
   const handleMaximizePanel = () => {
     if (!isPanelMaximized) {
       // Store current position and size before maximizing
@@ -505,6 +508,31 @@ const MapAnggotaKlaim = () => {
     }
     setIsPanelMaximized(!isPanelMaximized);
   };
+
+  const handleMaximizeChart = () => {
+    setIsChartMaximized(!isChartMaximized);
+  };
+
+  // State to track which anggotas have petak data
+  const [anggotaPetakStatus, setAnggotaPetakStatus] = useState({});
+  
+  // Panel state - simplified with react-rnd
+  const [panelState, setPanelState] = useState({
+    x: window.innerWidth - 300, // Position on the right side
+    y: 15,
+    width: 280,
+    height: window.innerHeight * 0.75,
+  });
+
+  // Helper function to check if petak data exists for an anggota
+  const hasPetakData = (anggota) => {
+    const status = anggotaPetakStatus[anggota.Nik];
+    // If status is undefined, we haven't checked yet, so allow the button to be enabled
+    // If status is false, we know there's no data, so disable the button
+    // If status is true, we know there's data, so enable the button
+    return status !== false;
+  };
+
 
   // Handle window resize when maximized
   useEffect(() => {
@@ -641,12 +669,6 @@ const MapAnggotaKlaim = () => {
       setAnalyticsPanelOpen(false);
     }
   };
-
-  const handleMaximizeChart = () => {
-    setIsChartMaximized(!isChartMaximized);
-  };
-
-
 
   // Generate data for the last 2 months
   const generateLastTwoMonthsData = () => {
@@ -995,20 +1017,20 @@ const MapAnggotaKlaim = () => {
                                 </Typography>
                                 
                                 <Typography component="div" variant="caption" color="text.secondary" sx={{ mb: 0.5, fontSize: '0.7rem' }}>
-                                  <strong>Luas Lahan:</strong> {currentAnggota['Luas lahan'] || '0'} ha
+                                  <strong>Luas Lahan:</strong> {currentAnggota["Luas lahan"] || '0'} ha
                                 </Typography>
                                 
                                 <Typography component="div" variant="caption" color="text.secondary" sx={{ mb: 0.5, fontSize: '0.7rem' }}>
-                                  <strong>Jumlah Petak:</strong> {currentAnggota['Jumlah Petak Alami'] || '0'}
+                                  <strong>Jumlah Petak:</strong> {currentAnggota.JumlahPetakAlami || '0'}
                                 </Typography>
                                 
                                 <Typography component="div" variant="caption" color="text.secondary" sx={{ mb: 0.5, fontSize: '0.7rem' }}>
-                                  <strong>Jenis Lahan:</strong> {currentAnggota['Jenis lahan'] || 'Tidak tersedia'}
+                                  <strong>Jenis Lahan:</strong> {currentAnggota.JenisLahan || 'Tidak tersedia'}
                                 </Typography>
                                 
-                                {currentAnggota.Alamat && (
+                                {currentAnggota["Desa Petani"] && (
                                   <Typography component="div" variant="caption" color="text.secondary" sx={{ mb: 1.5, fontSize: '0.7rem' }}>
-                                    <strong>Alamat:</strong> {currentAnggota.Alamat}, {currentAnggota.Desa}, {currentAnggota.Kecamatan}
+                                    <strong>Desa:</strong> {currentAnggota["Desa Petani"]}
                                   </Typography>
                                 )}
                                 
@@ -1019,17 +1041,37 @@ const MapAnggotaKlaim = () => {
                                     variant={selectedAnggota?.Nik === currentAnggota.Nik && petakLayerVisible ? "contained" : "outlined"}
                                     startIcon={<VisibilityIcon sx={{ fontSize: '16px' }} />}
                                     onClick={() => handleViewPetak(currentAnggota)}
-                                    disabled={!hasPetakData(currentAnggota)}
+                                    disabled={!hasPetakData(currentAnggota) || loadingPetakData}
                                     sx={{ 
                                       minWidth: 'auto', 
                                       fontSize: '0.65rem',
                                       padding: '4px 8px',
                                       opacity: anggotaPetakStatus[currentAnggota.Nik] === false ? 0.5 : 1,
-                                      backgroundColor: anggotaPetakStatus[currentAnggota.Nik] === false ? '#f5f5f5' : 'inherit'
+                                      backgroundColor: selectedAnggota?.Nik === currentAnggota.Nik && petakLayerVisible 
+                                        ? '#1976d2' 
+                                        : anggotaPetakStatus[currentAnggota.Nik] === false 
+                                          ? '#f5f5f5' 
+                                          : 'inherit',
+                                      color: selectedAnggota?.Nik === currentAnggota.Nik && petakLayerVisible 
+                                        ? 'white' 
+                                        : 'inherit',
+                                      borderColor: selectedAnggota?.Nik === currentAnggota.Nik && petakLayerVisible 
+                                        ? '#1976d2' 
+                                        : '#1976d2',
+                                      '&:hover': {
+                                        backgroundColor: selectedAnggota?.Nik === currentAnggota.Nik && petakLayerVisible 
+                                          ? '#1565c0' 
+                                          : 'rgba(25, 118, 210, 0.1)',
+                                        borderColor: '#1976d2'
+                                      }
                                     }}
-                                    title={anggotaPetakStatus[currentAnggota.Nik] === false ? "Data panel belum tersedia" : "View Petak"}
+                                    title={anggotaPetakStatus[currentAnggota.Nik] === false ? "Data panel belum tersedia" : loadingPetakData ? "Loading..." : "View Petak"}
                                   >
-                                    {selectedAnggota?.Nik === currentAnggota.Nik && petakLayerVisible ? 'Hide Petak' : 'View Petak'}
+                                    {loadingPetakData && selectedAnggota?.Nik === currentAnggota.Nik 
+                                      ? 'Loading...' 
+                                      : selectedAnggota?.Nik === currentAnggota.Nik && petakLayerVisible 
+                                        ? 'Hide Petak' 
+                                        : 'View Petak'}
                                   </Button>
                                   
                                   {anggotaPetakStatus[currentAnggota.Nik] === false && (
@@ -1057,7 +1099,23 @@ const MapAnggotaKlaim = () => {
                                       fontSize: '0.65rem',
                                       padding: '4px 8px',
                                       opacity: anggotaPetakStatus[currentAnggota.Nik] === false ? 0.5 : 1,
-                                      backgroundColor: anggotaPetakStatus[currentAnggota.Nik] === false ? '#f5f5f5' : 'inherit'
+                                      backgroundColor: selectedAnggota?.Nik === currentAnggota.Nik && analyticsPanelOpen 
+                                        ? '#4caf50' 
+                                        : anggotaPetakStatus[currentAnggota.Nik] === false 
+                                          ? '#f5f5f5' 
+                                          : 'inherit',
+                                      color: selectedAnggota?.Nik === currentAnggota.Nik && analyticsPanelOpen 
+                                        ? 'white' 
+                                        : 'inherit',
+                                      borderColor: selectedAnggota?.Nik === currentAnggota.Nik && analyticsPanelOpen 
+                                        ? '#4caf50' 
+                                        : '#4caf50',
+                                      '&:hover': {
+                                        backgroundColor: selectedAnggota?.Nik === currentAnggota.Nik && analyticsPanelOpen 
+                                          ? '#388e3c' 
+                                          : 'rgba(76, 175, 80, 0.1)',
+                                        borderColor: '#4caf50'
+                                      }
                                     }}
                                     title={anggotaPetakStatus[currentAnggota.Nik] === false ? "Data petak belum tersedia" : "View Analytics"}
                                   >
@@ -1249,13 +1307,13 @@ const MapAnggotaKlaim = () => {
               </AccordionSummary>
               <AccordionDetails sx={{ width: '100%', padding: '12px' }}>
                 <Typography variant="caption" color="text.secondary" sx={{ marginBottom: '6px', fontSize: '0.7rem' }}>
-                  Luas Total: {selectedAnggota['Luas lahan'] || '0'} ha
+                  Luas Total: {selectedAnggota["Luas lahan"] || '0'} ha
                 </Typography>
                 <Typography variant="caption" color="text.secondary" sx={{ marginBottom: '6px', fontSize: '0.7rem' }}>
-                  Jumlah Petak: {selectedAnggota['Jumlah Petak Alami'] || '0'}
+                  Jumlah Petak: {selectedAnggota.JumlahPetakAlami || '0'}
                 </Typography>
                 <Typography variant="caption" color="text.secondary" sx={{ marginBottom: '6px', fontSize: '0.7rem' }}>
-                  Jenis Lahan: {selectedAnggota['Jenis lahan'] || 'Tidak tersedia'}
+                  Jenis Lahan: {selectedAnggota.JenisLahan || 'Tidak tersedia'}
                 </Typography>
                 <Typography variant="caption" color="text.secondary" sx={{ marginBottom: '6px', fontSize: '0.7rem' }}>
                   NIK: {selectedAnggota.Nik || 'Tidak tersedia'}

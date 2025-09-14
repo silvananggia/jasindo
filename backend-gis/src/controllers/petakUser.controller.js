@@ -345,3 +345,64 @@ exports.getPetakById = async (req, res) => {
   }
 };
 
+exports.getPetakByIdPetak = async (req, res) => {
+  try {
+    const idpetak = req.params.id;
+
+    // Get the exact petak by idpetak with geometry for precise zooming
+    const result = await db.query(
+      `
+      SELECT 
+        id,
+        idpetak,
+        nik,
+        luas,
+        ST_AsGeoJSON(ST_Transform(geometry, 4326))::json AS geometry,
+        ST_AsGeoJSON(ST_Centroid(ST_Transform(geometry, 4326)))::json AS center,
+        ST_AsGeoJSON(ST_Envelope(ST_Transform(geometry, 4326)))::json AS extent
+      FROM petak_user
+      WHERE idpetak = $1
+      `,
+      [idpetak]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        code: 404,
+        status: "error",
+        data: "Petak not found",
+      });
+    }
+
+    const data = result.rows[0];
+    
+    res.json({
+      code: 200,
+      status: "success",
+      data: {
+        id: data.id,
+        idpetak: data.idpetak,
+        nik: data.nik,
+        luas: parseFloat(data.luas),
+        geometry: data.geometry,
+        center: data.center,
+        extent: data.extent,
+        bounds: {
+          minX: data.extent.coordinates[0][0][0],
+          minY: data.extent.coordinates[0][0][1],
+          maxX: data.extent.coordinates[0][2][0],
+          maxY: data.extent.coordinates[0][2][1]
+        }
+      },
+    });
+
+  } catch (error) {
+    console.error("Error getting petak by idpetak:", error);
+    res.status(500).json({
+      code: 500,
+      status: "error",
+      data: "Internal Server Error",
+    });
+  }
+};
+

@@ -228,6 +228,15 @@ exports.getAnggotaKlaim = async (req, res) => {
     return res.status(401).json({ message: "No session cookie found" });
   }
 
+  const {
+    search_text = "",
+    search_field = "",
+    per_page = 100,
+    page = 1,
+    order_by0 = "id_anggota",
+    order_by1 = "ASC",
+  } = req.query;
+
   const targetUrl = `${BASE_URL}/klaim/data_klaim_detail/${idkelompok}/${idklaim}/ajax_list`;
 
   try {
@@ -245,11 +254,20 @@ exports.getAnggotaKlaim = async (req, res) => {
     // console.log("Response from CI:", response.data);
 
     if (response.data.logged_in) {
+      // Kirim parameter ke target CI (POST)
+      const formData = qs.stringify({
+        search_text,
+        search_field,
+        per_page,
+        "order_by[0]": order_by0,
+        "order_by[1]": order_by1,
+        page,
+      });
 
-
-      const { data: html } = await axios.get(targetUrl, {
+      const { data: html } = await axios.post(targetUrl, formData, {
         headers: {
           Cookie: req.headers.cookie,
+          "Content-Type": "application/x-www-form-urlencoded",
           'User-Agent': req.headers['user-agent'],
           'Accept': req.headers['accept'],
           'Accept-Language': req.headers['accept-language']
@@ -278,11 +296,13 @@ exports.getAnggotaKlaim = async (req, res) => {
         data.push(row);
       });
       const noPolis = $('#field-no_polis').val();
+
       res.json({
         success: true,
         idkelompok,
         idklaim,
         noPolis,
+        pagination: { page: Number(page), per_page: Number(per_page) },
         data
       });
     } else {
