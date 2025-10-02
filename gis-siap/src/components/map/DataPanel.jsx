@@ -46,7 +46,7 @@ const DataPanel = ({
   mapInstance, // Map instance for zoom functionality
 }) => {
   // Debug: Log listPetak data structure
-  console.log('DataPanel received listPetak:', listPetak);
+  // console.log('DataPanel received listPetak:', listPetak);
   const theme = useTheme();
   const dispatch = useDispatch();
   const [page, setPage] = useState(0);
@@ -63,14 +63,14 @@ const DataPanel = ({
     // Update main layer style
     if (polygonLayerRef.current) {
       const hoverStyle = (feature) => {
-        const featureId = feature.get('id');
+        const featureId = feature.get('psid');
         const properties = feature.getProperties();
         
         // Try different property names that might contain the petak ID
         const possibleIds = [
-          properties.idpetak,
-          properties.id,
-          properties.idds_siap,
+          properties.petak_id,
+          properties.psid,
+          properties.kel_id,
           featureId
         ].filter(Boolean);
         
@@ -164,10 +164,10 @@ const DataPanel = ({
         }
 
         // Call the API to get exact petak data
-        console.log('Getting exact petak data for ID:', dbId);
-        console.log('source:', source);
+        // console.log('Getting exact petak data for ID:', dbId);
+        // console.log('source:', source);
         exactPetakData = await dispatch(getPetakById(dbId));
-        console.log('end')
+        // console.log('end')
       }
       
       if (exactPetakData && exactPetakData.data) {
@@ -221,7 +221,7 @@ const DataPanel = ({
 
   const handleDeletePetak = async (petakId, isFromDatabase = false) => {
     try {
-      console.log('DataPanel.handleDeletePetak called with:', { petakId, isFromDatabase });
+      // console.log('DataPanel.handleDeletePetak called with:', { petakId, isFromDatabase });
       const result = await Swal.fire({
         title: 'Konfirmasi Hapus',
         text: `Apakah Anda yakin ingin menghapus petak?`,
@@ -236,10 +236,10 @@ const DataPanel = ({
       if (result.isConfirmed) {
         if (isFromDatabase) {
           // Delete from database
-          console.log('DataPanel: Deleting from database with ID:', petakId);
+          // console.log('DataPanel: Deleting from database with ID:', petakId);
           if (onDeletePetak) {
             await onDeletePetak(petakId);
-            console.log('DataPanel: Database delete completed');
+            // console.log('DataPanel: Database delete completed');
           } else {
             console.warn('onDeletePetak function not provided');
           }
@@ -287,7 +287,7 @@ const DataPanel = ({
           <strong>Nama:</strong> {formData.nama}
         </Typography>
         <Typography variant={isMobile ? "body2" : "body1"} sx={{ mb: 0.5 }}>
-          <strong>Luas Lahan:</strong> {formData.luasLahan} ha
+          <strong>Luas Lahan:</strong> {parseFloat(formData.luasLahan || 0).toFixed(2)} ha
         </Typography>
         <Typography variant={isMobile ? "body2" : "body1"} sx={{ mb: 0.5 }}>
           <strong>Jumlah Petak:</strong> {formData.jmlPetak}
@@ -355,7 +355,7 @@ const DataPanel = ({
             <Box sx={{ mb: 2 }}>
               {listPetak.map((p) => {
                 const itemId = p.idpuser;
-                const itemIdForDisplay = p.idpetak;
+                const itemIdForDisplay = p.idpetak || 'N/A';
                 
                 return (
                   <Card 
@@ -378,7 +378,7 @@ const DataPanel = ({
                             ID: {itemIdForDisplay}
                           </Typography>
                           <Typography variant="body2" color="text.secondary">
-                            Luas: {p.luas} ha
+                            Luas: {parseFloat(p.luas || 0).toFixed(2)} ha
                           </Typography>
                         </Box>
                         <Box sx={{ display: 'flex', gap: 0.5 }}>
@@ -426,7 +426,7 @@ const DataPanel = ({
               <TableBody>
                 {listPetak.map((p) => {
                   const itemId = p.idpuser;
-                  const itemIdForDisplay = p.idpetak;
+                  const itemIdForDisplay = p.idpetak || 'N/A';
                   
                   return (
                     <TableRow 
@@ -445,7 +445,7 @@ const DataPanel = ({
                       </TableCell>
                       <TableCell>
                         <Typography variant={isMobile ? "caption" : "body2"}>
-                          {p.luas}
+                          {parseFloat(p.luas || 0).toFixed(2)}
                         </Typography>
                       </TableCell>
                       <TableCell align="right">
@@ -545,29 +545,29 @@ const DataPanel = ({
                         sx={{ 
                           mb: 1, 
                           cursor: 'pointer',
-                          backgroundColor: hoveredId === p.id ? 'rgba(0, 0, 0, 0.04)' : 'inherit',
+                          backgroundColor: hoveredId === (p.id || p.petak_id) ? 'rgba(0, 0, 0, 0.04)' : 'inherit',
                           '&:hover': {
                             backgroundColor: 'rgba(0, 0, 0, 0.04)'
                           }
                         }}
-                        onMouseEnter={() => handleMouseEnter(p.id)}
+                        onMouseEnter={() => handleMouseEnter(p.id || p.petak_id)}
                         onMouseLeave={handleMouseLeave}
                       >
                         <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
                           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <Box>
-                              <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 0.5 }}>
-                                ID: {p.id}
-                              </Typography>
+                            <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 0.5 }}>
+                              ID: {p.petakid || p.petak_id || p.id || 'N/A'}
+                            </Typography>
                               <Typography variant="body2" color="text.secondary">
-                                Luas: {p.area} ha
+                                Luas: {parseFloat(p.area || 0).toFixed(2)} ha
                               </Typography>
                             </Box>
                             <IconButton
-                              aria-label={`Hapus Lahan ${p.id}`}
+                              aria-label={`Hapus Lahan ${p.petakid || p.petak_id || p.id || 'N/A'}`}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleDeletePetak(p.id, false);
+                                handleDeletePetak(p.id || p.petak_id, false);
                               }}
                               size="small"
                               color="error"
@@ -593,21 +593,21 @@ const DataPanel = ({
                       {selectedPercils.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map((p) => (
                         <TableRow 
                           key={p.id}
-                          onMouseEnter={() => handleMouseEnter(p.id)}
-                          onMouseLeave={handleMouseLeave}
-                          sx={{ 
-                            cursor: 'pointer',
-                            backgroundColor: hoveredId === p.id ? 'rgba(0, 0, 0, 0.04)' : 'inherit'
-                          }}
+                        onMouseEnter={() => handleMouseEnter(p.id || p.petak_id)}
+                        onMouseLeave={handleMouseLeave}
+                        sx={{ 
+                          cursor: 'pointer',
+                          backgroundColor: hoveredId === (p.id || p.petak_id) ? 'rgba(0, 0, 0, 0.04)' : 'inherit'
+                        }}
                         >
-                          <TableCell><Typography variant={isMobile ? "caption" : "body2"}>{p.id}</Typography></TableCell>
-                          <TableCell><Typography variant={isMobile ? "caption" : "body2"}>{p.area}</Typography></TableCell>
+                          <TableCell><Typography variant={isMobile ? "caption" : "body2"}>{p.petakid || p.petak_id || p.id || 'N/A'}</Typography></TableCell>
+                          <TableCell><Typography variant={isMobile ? "caption" : "body2"}>{parseFloat(p.area || 0).toFixed(2)}</Typography></TableCell>
                           <TableCell align="right">
                             <IconButton
-                              aria-label={`Hapus Lahan ${p.id}`}
+                              aria-label={`Hapus Lahan ${p.petakid || p.petak_id || p.id || 'N/A'}`}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleDeletePetak(p.id, false);
+                                handleDeletePetak(p.id || p.petak_id, false);
                               }}
                               size="small"
                               color="error"

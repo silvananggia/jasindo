@@ -1,24 +1,28 @@
 import { Fill, Stroke, Style } from 'ol/style';
 
 export const getPercilStyle = (selection, lockedIDs = [], isLimitReached = false) => (feature) => {
-  const id = feature.get('id');
+  const id = feature.get('psid');
   const properties = feature.getProperties();
   
   // Try different property names that might contain the petak ID
   const possibleIds = [
-    properties.idpetak,
-    properties.id,
-    properties.idds_siap, // This might be the actual petak identifier
+    properties.petak_id,
+    properties.idpetak, // Add idpetak field
+    properties.psid,
+    properties.kel_id, // This might be the actual petak identifier
     id
   ].filter(Boolean); // Remove undefined values
   
   // Check multiple ID formats for matching, including string conversion
-  const isSelected = selection.some((p) => possibleIds.includes(p.id));
+  const isSelected = selection.some((p) => {
+    // Check if any of the possible IDs match the selection's ID or petakid
+    return possibleIds.includes(p.id) || possibleIds.includes(p.petakid) || 
+           possibleIds.includes(p.id?.toString()) || possibleIds.includes(p.petakid?.toString());
+  });
   const isLocked = possibleIds.some(possibleId => 
     lockedIDs.includes(possibleId) || lockedIDs.includes(possibleId.toString())
   );
   
-
   
   let strokeColor = '#FF5733'; // Default red
   let fillColor = 'rgba(255, 87, 51, 0.1)'; // Default red fill

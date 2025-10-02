@@ -50,29 +50,7 @@ const MapRegister = () => {
   const [tileUrl, setTileUrl] = useState();
 
   // Function to simulate iframe message
-  const handleSimulateIframeMessage = () => {
-    console.log("MapRegister - Simulating iframe message");
-    
-    const testMessage = {
-      nik: '320328-021093-0003',
-      nama: 'SUBHI',
-      address: 'Sukamandijaya, Ciasem, Subang, Jawa Barat',
-      luasLahan: 1.00,
-      jmlPetak: 5,
-      noPolis: '423.266.110.25.2/100/000'
-    };
-    
-    console.log("MapRegister - Sending test message:", testMessage);
-    
-    // Simulate the iframe message
-    const event = new MessageEvent('message', {
-      data: testMessage,
-      origin: window.location.origin
-    });
-    
-    // Dispatch the event
-    window.dispatchEvent(event);
-  };
+  
 
   const handlePercilSelect = useCallback(async (percilData) => {
     try {
@@ -101,7 +79,14 @@ const MapRegister = () => {
           : [...prev, percilData];
 
         if (polygonLayerRef.current) {
-          polygonLayerRef.current.setStyle(getPercilStyle(updated));
+          const lockedIDs = (listKlaim || []).map(p => p.idpetak);
+          const totalRegisteredKlaim = (listKlaim || []).length;
+          const totalSelectedPetak = updated.length;
+          const totalPetak = totalRegisteredKlaim + totalSelectedPetak;
+          const isLimitReached = totalPetak >= formData.jmlPetak;
+          
+          
+          polygonLayerRef.current.setStyle(getPercilStyle(updated, lockedIDs, isLimitReached));
           polygonLayerRef.current.changed();
         }
         return updated;
@@ -125,18 +110,18 @@ const MapRegister = () => {
 
   useEffect(() => {
     const handleMessage = (e) => {
-      console.log("MapRegister - Received message:", e.data);
-      console.log("MapRegister - Message origin:", e.origin);
+      // console.log("MapRegister - Received message:", e.data);
+      // console.log("MapRegister - Message origin:", e.origin);
       
       if (e.data && e.data.nik) {
-        console.log("MapRegister - Valid message received, updating formData with:", e.data);
+        // console.log("MapRegister - Valid message received, updating formData with:", e.data);
         setFormData(e.data);
         setSearchInput(e.data.address);
-        console.log("MapRegister - formData and searchInput updated");
+        // console.log("MapRegister - formData and searchInput updated");
         
         setTimeout(() => {
           if (mapInstance.current) {
-            console.log("MapRegister - Triggering search for address:", e.data.address);
+            // console.log("MapRegister - Triggering search for address:", e.data.address);
             handleSearch(e.data.address, mapInstance.current, process.env.REACT_APP_GOOGLE_API_KEY);
           }
         }, 1000);
@@ -270,12 +255,12 @@ const MapRegister = () => {
 
   const handleDeleteKlaim = async (klaimId) => {
     try {
-      console.log('MapClaim.handleDeleteKlaim called with klaimId:', klaimId);
+      // console.log('MapClaim.handleDeleteKlaim called with klaimId:', klaimId);
       await dispatch(deleteKlaim(klaimId));
-      console.log('MapClaim.handleDeleteKlaim: deleteKlaim completed');
+      // console.log('MapClaim.handleDeleteKlaim: deleteKlaim completed');
       // Refresh the klaim list after deletion
       await dispatch(getKlaimUser(formData.nik, formData.noPolis));
-      console.log('MapClaim.handleDeleteKlaim: getKlaimUser completed');
+      // console.log('MapClaim.handleDeleteKlaim: getKlaimUser completed');
     } catch (error) {
       console.error("Error deleting klaim:", error);
       throw error; // Re-throw to be handled by the DataPanel
@@ -333,7 +318,7 @@ const MapRegister = () => {
           top: '20px',
           right: '40px',
           width: '100%',
-          maxWidth: '320px',
+          maxWidth: '380px',
           background: 'rgba(255, 255, 255, 0.95)',
           borderRadius: '16px',
           padding: '0 10px 10px 10px',
@@ -430,17 +415,7 @@ const MapRegister = () => {
         >
           <SearchIcon />
         </IconButton>
-        <IconButton
-          onClick={handleSimulateIframeMessage}
-          style={{
-            borderRadius: '25%',
-            backgroundColor: '#4CAF50',
-            color: 'white',
-            padding: '7px',
-          }}
-        >
-          <RefreshIcon />
-        </IconButton>
+        
       </div>
 
       <Snackbar open={alertOpen} onClose={() => setAlertOpen(false)}>

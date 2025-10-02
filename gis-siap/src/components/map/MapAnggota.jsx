@@ -170,14 +170,14 @@ const MapAnalytic = () => {
   }, [selectedPercils]);
 
   useEffect(() => {
-    if (selectedPercils.length > formData.jmlPetak) {
+   /*  if (selectedPercils.length > formData.jmlPetak) {
       setAlertMessage(
         `Jumlah petak terpilih saat ini ${selectedPercils.length}, tidak dapat lebih dari ${formData.jmlPetak}`
       );
       setAlertOpen(true);
       setIsValid(false);
       return;
-    }
+    } */
 
     const luasLahanFloat = parseFloat(formData.luasLahan);
     const areaLimit = luasLahanFloat + luasLahanFloat * 0.25;
@@ -269,8 +269,8 @@ const MapAnalytic = () => {
   useEffect( () => {
     
     if (formData && formData.idKelompok) {
-      console.log('formData:', formData);
-      console.log('formData.idKelompok:', formData.idKelompok);
+      // console.log('formData:', formData);
+      // console.log('formData.idKelompok:', formData.idKelompok);
       dispatch(getAnggota(formData.idKelompok));
     }
   },[formData.idKelompok]);
@@ -501,11 +501,11 @@ const MapAnalytic = () => {
       
       try {
         const result = await dispatch(getPetakUser(anggota.NIK));
-        console.log('getPetakUser result:', result);
+        // console.log('getPetakUser result:', result);
         
         // Check if petak data exists using the result directly, not the state
         if (!result || !result.data || result.data.length === 0) {
-          console.log('No petak data found for NIK:', anggota.NIK);
+          // console.log('No petak data found for NIK:', anggota.NIK);
           // Mark this anggota as having no petak data
           setAnggotaPetakStatus(prev => ({ ...prev, [anggota.NIK]: false }));
           

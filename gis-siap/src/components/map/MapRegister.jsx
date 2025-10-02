@@ -1,6 +1,6 @@
 import 'ol/ol.css';
 import "ol-ext/dist/ol-ext.css";
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Autocomplete } from '@react-google-maps/api';
 import { Box, Tabs, Tab, IconButton, Snackbar, Alert, useTheme, useMediaQuery, Drawer, Fab } from '@mui/material';
@@ -44,19 +44,50 @@ const MapRegister = () => {
 
 
   const { formData, setFormData } = useURLParams();
+  
+  // Create a ref to store the current jmlPetak value to avoid closure issues
+  const jmlPetakRef = useRef(0);
+  
+  // Update jmlPetakRef when formData changes
+  useEffect(() => {
+    // console.log('MapRegister - useEffect triggered with formData.jmlPetak:', formData.jmlPetak, 'type:', typeof formData.jmlPetak);
+    if (formData.jmlPetak) {
+      const parsed = parseInt(formData.jmlPetak);
+      // console.log('MapRegister - Parsed value:', parsed, 'isNaN:', isNaN(parsed), 'parsed > 0:', parsed > 0);
+      if (!isNaN(parsed) && parsed > 0) {
+        // console.log('MapRegister - Updating jmlPetakRef to:', parsed);
+        jmlPetakRef.current = parsed;
+      }
+    }
+  }, [formData.jmlPetak]);
+
+  // Debug: Track when jmlPetakRef changes
+  useEffect(() => {
+    // console.log('MapRegister - jmlPetakRef.current changed to:', jmlPetakRef.current, 'type:', typeof jmlPetakRef.current);
+  }, [formData.jmlPetak]);
 
   // Initialize all formData values as reactive variables using useMemo
   const formDataValues = useMemo(() => {
-    console.log('formDataValues useMemo - formData:', formData);
-    console.log('formDataValues useMemo - formData.jmlPetak:', formData.jmlPetak, 'type:', typeof formData.jmlPetak);
+    // console.log('formDataValues useMemo - CALLED with formData:', formData);
+    // console.log('formDataValues useMemo - formData.jmlPetak:', formData.jmlPetak, 'type:', typeof formData.jmlPetak);
     
-    // Better parsing with fallback to test data if empty
-    const parsedJmlPetak = formData.jmlPetak && formData.jmlPetak !== '' ? parseInt(formData.jmlPetak) : 5; // Default to 5 for testing
-    const parsedLuasLahan = formData.luasLahan && formData.luasLahan !== '' ? parseFloat(formData.luasLahan) : 1.0; // Default to 1.0 for testing
+    // Properly parse jmlPetak from string to number
+    let parsedJmlPetak = 0;
+    if (formData.jmlPetak) {
+      const parsed = parseInt(formData.jmlPetak);
+      parsedJmlPetak = isNaN(parsed) ? 0 : parsed;
+    }
     
-    console.log('formDataValues useMemo - parsedJmlPetak:', parsedJmlPetak);
+    let parsedLuasLahan = 0;
+    if (formData.luasLahan) {
+      const parsed = parseFloat(formData.luasLahan);
+      parsedLuasLahan = isNaN(parsed) ? 0 : parsed;
+    }
     
-    return {
+    // console.log('formDataValues useMemo - parsedJmlPetak:', parsedJmlPetak, 'type:', typeof parsedJmlPetak);
+    // console.log('formDataValues useMemo - formData.jmlPetak raw:', formData.jmlPetak, 'isNaN check:', isNaN(parseInt(formData.jmlPetak)));
+
+    const result = {
       nik: formData.nik || '',
       nama: formData.nama || '',
       address: formData.address || '',
@@ -68,14 +99,19 @@ const MapRegister = () => {
       idKelompok: formData.idKelompok || '',
       idKlaim: formData.idKlaim || ''
     };
+    
+    // console.log('formDataValues useMemo - final result:', result);
+    return result;
   }, [formData]);
 
   // Destructure for easier access
   const { nik, nama, address, idkab, idkec, jmlPetak, luasLahan, noPolis, idKelompok, idKlaim } = formDataValues;
 
-  // Debug: Log formData changes
-  console.log('MapRegister - formData updated:', formData);
-  console.log('MapRegister - jmlPetak derived:', jmlPetak, 'type:', typeof jmlPetak);
+  // Debug: Track when formData changes
+  useEffect(() => {
+    // console.log('MapRegister - formData changed:', formData);
+    // console.log('MapRegister - formData.jmlPetak:', formData.jmlPetak, 'type:', typeof formData.jmlPetak);
+  }, [formData]);
 
   const [searchInput, setSearchInput] = useState(address);
   const [selectedPercils, setSelectedPercils] = useState([]);
@@ -107,11 +143,31 @@ const MapRegister = () => {
   // Use swipe gesture hook
   useSwipeGesture(handleSwipeLeft, handleSwipeRight);
 
+  // Debug: Log jmlPetak value when callback is created
+  // console.log('MapRegister - Creating handlePercilSelect callback with jmlPetakRef.current:', jmlPetakRef.current, 'type:', typeof jmlPetakRef.current);
+
   const handlePercilSelect = useCallback(async (percilData) => {
     try {
-      // Check if jmlPetak is valid
-      if (!jmlPetak || jmlPetak <= 0) {
-        console.warn('handlePercilSelect - jmlPetak is invalid:', jmlPetak);
+      // Log all parcel attributes to console
+      // console.log('=== PARCEL SELECTED - ALL ATTRIBUTES ===');
+      // console.log('Percil Data:', percilData);
+      // console.log('All Properties:', Object.keys(percilData));
+      // console.log('Property Details:');
+      // Object.entries(percilData).forEach(([key, value]) => {
+      //   console.log(`  ${key}:`, value, `(type: ${typeof value})`);
+      // });
+      // console.log('==========================================');
+      
+      // Use the ref to get the current jmlPetak value
+      const currentJmlPetak = jmlPetakRef.current;
+      
+      // Debug logging
+      // console.log('handlePercilSelect - jmlPetakRef.current:', jmlPetakRef.current, 'type:', typeof jmlPetakRef.current);
+      // console.log('handlePercilSelect - currentJmlPetak:', currentJmlPetak, 'type:', typeof currentJmlPetak);
+      
+      // Check if jmlPetak is valid and properly loaded
+      if (!currentJmlPetak || currentJmlPetak <= 0) {
+        // console.log('jmlPetakRef.current is invalid or not loaded:', currentJmlPetak);
         setAlertMessage('Data jumlah petak belum tersedia. Silakan tunggu data dimuat.');
         setAlertOpen(true);
         return;
@@ -121,17 +177,15 @@ const MapRegister = () => {
       const totalRegisteredPetak = (listPetak || []).length;
       const totalSelectedPetak = selectedPercils.length;
       const totalPetak = totalRegisteredPetak + totalSelectedPetak;
-      console.log('handlePercilSelect - formData:', formData);
-      console.log('handlePercilSelect - jmlPetak:', jmlPetak, 'type:', typeof jmlPetak);
-      console.log('handlePercilSelect - totalPetak:', totalPetak, 'jmlPetak:', jmlPetak);
-      if (totalPetak >= jmlPetak) {
-        setAlertMessage(`Tidak dapat menambah petak lagi. Total petak (terdaftar: ${totalRegisteredPetak} + terpilih: ${totalSelectedPetak} = ${totalPetak}) sudah mencapai batas maksimum (${jmlPetak})`);
+     
+      if (totalPetak >= currentJmlPetak) {
+        setAlertMessage(`Tidak dapat menambah petak lagi. Total petak (terdaftar: ${totalRegisteredPetak} + terpilih: ${totalSelectedPetak} = ${totalPetak}) sudah mencapai batas maksimum (${currentJmlPetak})`);
         setAlertOpen(true);
         return;
       }
 
-      if (percilData.id) {
-        const idPetak = await dispatch(getPetakID(percilData.id));
+      if (percilData.psid) {
+        const idPetak = await dispatch(getPetakID(percilData.psid));
         if (Array.isArray(idPetak) && idPetak.length > 0) {
           setAlertMessage(`Tidak Dapat Dipilih, Lahan ini sudah didaftarkan sebelumnya`);
           setAlertOpen(true);
@@ -140,9 +194,9 @@ const MapRegister = () => {
       }
 
       setSelectedPercils((prev) => {
-        const exists = prev.find((p) => p.id === percilData.id);
+        const exists = prev.find((p) => p.psid === percilData.psid);
         const updated = exists
-          ? prev.filter((p) => p.id !== percilData.id)
+          ? prev.filter((p) => p.psid !== percilData.psid)
           : [...prev, percilData];
 
         return updated;
@@ -155,7 +209,7 @@ const MapRegister = () => {
         text: 'An error occurred while processing.',
       });
     }
-  }, [dispatch, listPetak, selectedPercils, jmlPetak]);
+  }, [dispatch, listPetak, selectedPercils]);
 
   const { mapRef, mapInstance, polygonLayerRef, basemapLayerRef } = useMap(
     isAuthenticated,
@@ -166,21 +220,16 @@ const MapRegister = () => {
   );
 
   useEffect(() => {
-    const handleMessage = (e) => {
-      if (e.data && e.data.nik) {
-        setFormData(e.data);
-        setSearchInput(e.data.address);
-        setTimeout(() => {
-          if (mapInstance.current) {
-            handleSearch(e.data.address, mapInstance.current, process.env.REACT_APP_GOOGLE_API_KEY);
-          }
-        }, 1000);
-      }
-    };
-
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, [mapInstance, setFormData]);
+    // Handle search input update when formData changes
+    if (formData.address) {
+      setSearchInput(formData.address);
+      setTimeout(() => {
+        if (mapInstance.current) {
+          handleSearch(formData.address, mapInstance.current, process.env.REACT_APP_GOOGLE_API_KEY);
+        }
+      }, 1000);
+    }
+  }, [formData.address, mapInstance]);
 
   useEffect(() => {
     setTotalArea(selectedPercils.reduce(
@@ -241,7 +290,7 @@ const MapRegister = () => {
   const handleSimpan = async () => {
     const payload = selectedPercils.map(p => ({
       nik: nik,
-      idpetak: p.id,
+      idpetak: p.petak_id,
       luas: p.area,
       geometry: p.geometry,
     }));
@@ -281,35 +330,6 @@ const MapRegister = () => {
       throw error; // Re-throw to be handled by the DataPanel
     }
   };
-
-  // Function to simulate iframe message for testing
-  const handleSimulateIframeMessage = () => {
-    console.log("MapRegister - Simulating iframe message");
-    
-    const testMessage = {
-      nik: '320328-021093-0003',
-      nama: 'SUBHI',
-      address: 'Sukamandijaya, Ciasem, Subang, Jawa Barat',
-      luasLahan: 1.00,
-      jmlPetak: 5,
-      noPolis: '423.266.110.25.2/100/000',
-      idKelompok: '107020',
-      idKlaim: '636',
-      idkec: '1074'
-    };
-    
-    console.log("MapRegister - Sending test message:", testMessage);
-    
-    // Simulate the iframe message
-    const event = new MessageEvent('message', {
-      data: testMessage,
-      origin: window.location.origin
-    });
-    
-    // Dispatch the event
-    window.dispatchEvent(event);
-  };
-
 
 
   // Separate effect for tile URL updates (only when kecamatan changes)
@@ -369,7 +389,7 @@ const MapRegister = () => {
 
     try {
       if (!petakList || petakList.length === 0) {
-        console.log('No petak data found for user');
+        // console.log('No petak data found for user');
         return;
       }
 
@@ -452,6 +472,7 @@ const MapRegister = () => {
   if (loading) {
     return <Spinner className="content-loader" />;
   }
+
 
   if (errmessage) {
     return (
@@ -541,7 +562,7 @@ const MapRegister = () => {
           PaperProps={{
             sx: {
               width: '100%',
-              maxWidth: '320px',
+              maxWidth: '370px',
               backgroundColor: 'rgba(255, 255, 255, 0.95)',
               backdropFilter: 'blur(10px)',
               borderLeft: '1px solid rgba(0, 0, 0, 0.1)',
@@ -648,7 +669,7 @@ const MapRegister = () => {
             top: '20px',
             right: '40px',
             width: '100%',
-            maxWidth: '320px',
+            maxWidth: '370px',
             background: 'rgba(255, 255, 255, 0.95)',
             borderRadius: '16px',
             padding: '0 10px 10px 10px',
@@ -771,21 +792,7 @@ const MapRegister = () => {
         >
           <SearchIcon fontSize={isMobile ? "small" : "medium"} />
         </IconButton>
-        <IconButton
-          onClick={handleSimulateIframeMessage}
-          style={{
-            borderRadius: '25%',
-            backgroundColor: '#4CAF50',
-            color: 'white',
-            padding: isMobile ? '6px' : '7px',
-            minWidth: isMobile ? '32px' : '36px',
-            height: isMobile ? '32px' : '36px',
-            marginLeft: '8px',
-          }}
-          title="Simulate Test Data"
-        >
-          <RefreshIcon fontSize={isMobile ? "small" : "medium"} />
-        </IconButton>
+        
       </div>
 
       <Snackbar

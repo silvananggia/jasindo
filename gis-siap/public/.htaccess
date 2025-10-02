@@ -1,5 +1,12 @@
 DirectoryIndex index.html
-Options -MultiViews
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteCond %{REQUEST_FILENAME} !-d
-RewriteRule ^ index.html [L]
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /~siapid3/simulasi_autp/gis/
+
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  RewriteRule ^ index.html [L]
+</IfModule>

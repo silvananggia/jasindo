@@ -72,30 +72,6 @@ const MapViewClaim = () => {
     checkGoogleMaps();
   }, []);
 
-  // Function to simulate iframe message
-  const handleSimulateIframeMessage = () => {
-    console.log("MapViewClaim - Simulating iframe message");
-    
-    const testMessage = {
-      nik: '320328-021093-0003',
-      nama: 'SUBHI',
-      address: 'Sukamandijaya, Ciasem, Subang, Jawa Barat',
-      luasLahan: 1.00,
-      jmlPetak: 5,
-      noPolis: '423.266.110.25.2/100/000'
-    };
-    
-    console.log("MapViewClaim - Sending test message:", testMessage);
-    
-    // Simulate the iframe message
-    const event = new MessageEvent('message', {
-      data: testMessage,
-      origin: window.location.origin
-    });
-    
-    // Dispatch the event
-    window.dispatchEvent(event);
-  };
 
   const handlePercilSelect = useCallback(async (percilData) => {
     try {
@@ -379,17 +355,7 @@ const MapViewClaim = () => {
         >
           <SearchIcon />
         </IconButton>
-        <IconButton
-          onClick={handleSimulateIframeMessage}
-          style={{
-            borderRadius: '25%',
-            backgroundColor: '#4CAF50',
-            color: 'white',
-            padding: '7px',
-          }}
-        >
-          <RefreshIcon />
-        </IconButton>
+        
       </div>
 
       <Snackbar open={alertOpen} onClose={() => setAlertOpen(false)}>

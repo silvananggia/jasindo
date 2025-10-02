@@ -81,10 +81,23 @@ export const useMap = (isAuthenticated, googleApiKey, onPercilSelect, tileUrl) =
 
           geometryGeoJSON = addZDimension(geometryGeoJSON);
 
-          const id = feature.get('id');
+          const id = feature.get('psid');
+          const petakid = feature.get('idpetak'); // Fix: use idpetak instead of petak_id
           const area = feature.get('luas');
+          
+          // Extract all feature properties
+          const allProperties = feature.getProperties();
+          
+          // Create percilData object with all properties
+          const percilData = {
+            id,
+            petakid,
+            area,
+            geometry: geometryGeoJSON,
+            ...allProperties // Spread all other properties
+          };
 
-          onPercilSelect({ id, area, geometry: geometryGeoJSON });
+          onPercilSelect(percilData);
         } catch (err) {
           console.error('Error processing feature:', err);
         }
