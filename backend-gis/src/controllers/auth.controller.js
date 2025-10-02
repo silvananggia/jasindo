@@ -5,7 +5,7 @@ const { promisify } = require('util');
 const axios = require("axios");
 
 // Get base URL from environment variable or use default
-const BASE_URL = process.env.BASE_URL || "http://localhost/newautp-siap-komersial";
+const BASE_URL = process.env.BASE_URL || "https://siap.asuransijasindo.co.id/~siapid3/simulasi_autp/";
 
 exports.checkAuth = async (req, res, next) => {
   const clientCookies = req.headers.cookie;

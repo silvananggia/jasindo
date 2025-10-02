@@ -9,7 +9,7 @@ exports.listAllPetak = async (req, res) => {
 
           const result = await db.query(
             `
-          SELECT id, luas FROM petak_sawah LIMIT 5;
+          SELECT psid, luas FROM petak_sawah LIMIT 5;
         `
           );
     
