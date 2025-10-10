@@ -212,3 +212,70 @@ exports.getPetakKlaimID = async (req, res) => {
     });
   }
 };
+
+exports.getPetakKlaimByNikGeoJSON = async (req, res) => {
+  try {
+    const nik = req.query.nik;
+    const nopolis = req.query.nopolis;
+
+    if (!nopolis) {
+      return res.status(400).json({
+        code: 400,
+        status: "error",
+        data: "nopolis query parameter is required",
+      });
+    }
+
+    // Get all petak klaim geometries for the user by NIK and return as GeoJSON FeatureCollection
+    const result = await db.query(
+      `
+      SELECT 
+        id,
+        nik,
+        nopolis,
+        idpetak,
+        luas,
+        ST_AsGeoJSON(ST_Transform(geometry, 4326))::json AS geometry
+      FROM petak_klaim
+      WHERE nik = $1 and nopolis = $2
+      ORDER BY idpetak
+      `,
+      [nik, nopolis]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        code: 404,
+        status: "error",
+        data: "No petak klaim data found for this NIK",
+      });
+    }
+
+    // Create GeoJSON FeatureCollection
+    const features = result.rows.map(row => ({
+      type: "Feature",
+      properties: {
+        id: row.id,
+        idpetak: row.idpetak,
+        nik: row.nik,
+        luas: parseFloat(row.luas)
+      },
+      geometry: row.geometry
+    }));
+
+    const geoJSON = {
+      type: "FeatureCollection",
+      features: features
+    };
+    
+    res.json(geoJSON);
+
+  } catch (error) {
+    console.error("Error getting petak klaim GeoJSON by NIK:", error);
+    res.status(500).json({
+      code: 500,
+      status: "error",
+      data: "Internal Server Error",
+    });
+  }
+};

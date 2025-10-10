@@ -11,6 +11,7 @@ router.get('/petakid/:id', petakUserController.petakId)
 router.get('/center-petak-user/:id', petakUserController.centerPetakUser)
 router.get('/petak-by-id/:id', petakUserController.getPetakById)
 router.get('/petak-by-idpetak/:id', petakUserController.getPetakByIdPetak)
+router.get('/petak-geojson', petakUserController.getPetakUserByNikGeoJSON)
 router.delete('/petak/:id', petakUserController.deletePetakUser)
 
 module.exports = router;

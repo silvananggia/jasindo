@@ -406,3 +406,60 @@ exports.getPetakByIdPetak = async (req, res) => {
   }
 };
 
+exports.getPetakUserByNikGeoJSON = async (req, res) => {
+  try {
+    const nik = req.query.nik;
+
+    // Get all petak geometries for the user by NIK and return as GeoJSON FeatureCollection
+    const result = await db.query(
+      `
+      SELECT 
+        id,
+        idpetak,
+        nik,
+        luas,
+        ST_AsGeoJSON(ST_Transform(geometry, 4326))::json AS geometry
+      FROM petak_user
+      WHERE nik = $1
+      ORDER BY idpetak
+      `,
+      [nik]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        code: 404,
+        status: "error",
+        data: "No petak data found for this NIK",
+      });
+    }
+
+    // Create GeoJSON FeatureCollection
+    const features = result.rows.map(row => ({
+      type: "Feature",
+      properties: {
+        id: row.id,
+        idpetak: row.idpetak,
+        nik: row.nik,
+        luas: parseFloat(row.luas)
+      },
+      geometry: row.geometry
+    }));
+
+    const geoJSON = {
+      type: "FeatureCollection",
+      features: features
+    };
+    
+    res.json(geoJSON);
+
+  } catch (error) {
+    console.error("Error getting petak GeoJSON by NIK:", error);
+    res.status(500).json({
+      code: 500,
+      status: "error",
+      data: "Internal Server Error",
+    });
+  }
+};
+
