@@ -21,6 +21,7 @@ import {
 import DeleteIcon from '@mui/icons-material/Delete';
 import SaveIcon from '@mui/icons-material/Save';
 import ZoomInIcon from '@mui/icons-material/ZoomIn';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import { getPercilStyle } from '../../utils/percilStyles';
 import { Style, Stroke, Fill } from 'ol/style';
 import { fromLonLat } from 'ol/proj';
@@ -41,12 +42,15 @@ const DataPanel = ({
   source, // 'MapView' or 'MapRegister'
   isLoading,
   onDeletePetak, // Function to delete petak from database
+  onRefreshData, // Function to refresh data from database
   isMobile,
   isTablet,
   mapInstance, // Map instance for zoom functionality
 }) => {
   // Debug: Log listPetak data structure
   // console.log('DataPanel received listPetak:', listPetak);
+  // console.log('DataPanel source:', source);
+  // console.log('DataPanel isLoading:', isLoading);
   const theme = useTheme();
   const dispatch = useDispatch();
   const [page, setPage] = useState(0);
@@ -130,20 +134,30 @@ const DataPanel = ({
 
   const handleZoomToPetak = async (petakId) => {
     if (!mapInstance || !mapInstance.current) {
-      console.warn('Map instance not available for zooming');
+      // console.warn('Map instance not available for zooming');
       return;
     }
 
     try {
       let exactPetakData;
 
-      if (source === 'MapViewClaim' || source === 'MapClaim') {
-        // For other sources, find the petak data to get the database ID
-
-        const petakData = listPetak?.find(p => p.idpetak === petakId );
+      if (source === 'MapViewClaim') {
+        // For MapViewClaim, use getPetakKlaimID
+        const petakData = listPetak?.find(p => p.idpetak === petakId);
        
         if (!petakData) {
-          console.warn('Petak data not found for ID:', petakId);
+          // console.warn('Petak data not found for ID:', petakId);
+          return;
+        }
+       
+        exactPetakData = await dispatch(getPetakById(petakData.idpuser));
+       
+      } else if (source === 'MapClaim') {
+        // For MapClaim, use getPetakById
+        const petakData = listPetak?.find(p => p.idpetak === petakId);
+       
+        if (!petakData) {
+          // console.warn('Petak data not found for ID:', petakId);
           return;
         }
         exactPetakData = await dispatch(getPetakById(petakData.idpuser));
@@ -152,14 +166,14 @@ const DataPanel = ({
         const petakData = listPetak?.find(p => p.idpetak === petakId || p.id === petakId);
         
         if (!petakData) {
-          console.warn('Petak data not found for ID:', petakId);
+          // console.warn('Petak data not found for ID:', petakId);
           return;
         }
 
         // Use the database ID to get exact petak data with geometry
         const dbId = petakData.id;
         if (!dbId) {
-          console.warn('Database ID not found for petak:', petakId);
+          // console.warn('Database ID not found for petak:', petakId);
           return;
         }
 
@@ -171,36 +185,77 @@ const DataPanel = ({
       }
       
       if (exactPetakData && exactPetakData.data) {
-        const { center, bounds } = exactPetakData.data;
         const view = mapInstance.current.getView();
         
-        if (center && center.coordinates) {
-          // Use the exact center point
-          view.animate({
-            center: fromLonLat([center.coordinates[0], center.coordinates[1]]),
-            zoom: 20,
-            duration: 1000
-          });
-        } else if (bounds) {
-          // Use bounds if center is not available
-          const extent = [
-            bounds.minX, bounds.minY,
-            bounds.maxX, bounds.maxY
-          ];
-          const bufferedExtent = buffer(extent, 25); // Add 25 meter buffer
-          view.fit(bufferedExtent, {
-            duration: 1000,
-            padding: [25, 25, 25, 25]
-          });
+        // Handle different data structures based on source
+        if (source === 'MapViewClaim') {
+          // For MapViewClaim, exactPetakData.data is an array
+          // console.log('MapViewClaim zoom - processing data:', exactPetakData.data);
+          const petakData = Array.isArray(exactPetakData.data) ? exactPetakData.data[0] : exactPetakData.data;
+          // console.log('MapViewClaim zoom - extracted petakData:', petakData);
+          
+          if (petakData && petakData.center && petakData.center.coordinates) {
+            // Use the exact center point
+            // console.log('MapViewClaim zoom - using center coordinates:', petakData.center.coordinates);
+            view.animate({
+              center: fromLonLat([petakData.center.coordinates[0], petakData.center.coordinates[1]]),
+              zoom: 20,
+              duration: 1000
+            });
+            // console.log('MapViewClaim zoom - animated to center');
+          } else if (petakData && petakData.bounds) {
+            // Use bounds if center is not available
+            // console.log('MapViewClaim zoom - using bounds:', petakData.bounds);
+            const extent = [
+              petakData.bounds.minX, petakData.bounds.minY,
+              petakData.bounds.maxX, petakData.bounds.maxY
+            ];
+            const bufferedExtent = buffer(extent, 25); // Add 25 meter buffer
+            view.fit(bufferedExtent, {
+              duration: 1000,
+              padding: [25, 25, 25, 25]
+            });
+            // console.log('MapViewClaim zoom - fitted to bounds');
+          } else {
+            // Fallback: zoom to a reasonable level
+            // console.log('MapViewClaim zoom - using fallback zoom (no center or bounds)');
+            view.animate({
+              zoom: 18,
+              duration: 1000
+            });
+          }
         } else {
-          // Fallback: zoom to a reasonable level
-          view.animate({
-            zoom: 18,
-            duration: 1000
-          });
+          // For other sources, exactPetakData.data is a single object
+          const { center, bounds } = exactPetakData.data;
+          
+          if (center && center.coordinates) {
+            // Use the exact center point
+            view.animate({
+              center: fromLonLat([center.coordinates[0], center.coordinates[1]]),
+              zoom: 20,
+              duration: 1000
+            });
+          } else if (bounds) {
+            // Use bounds if center is not available
+            const extent = [
+              bounds.minX, bounds.minY,
+              bounds.maxX, bounds.maxY
+            ];
+            const bufferedExtent = buffer(extent, 25); // Add 25 meter buffer
+            view.fit(bufferedExtent, {
+              duration: 1000,
+              padding: [25, 25, 25, 25]
+            });
+          } else {
+            // Fallback: zoom to a reasonable level
+            view.animate({
+              zoom: 18,
+              duration: 1000
+            });
+          }
         }
       } else {
-        console.warn('Could not get exact petak data, using fallback');
+        // console.warn('Could not get exact petak data, using fallback');
         // Fallback: zoom to a reasonable level
         const view = mapInstance.current.getView();
         view.animate({
@@ -209,7 +264,8 @@ const DataPanel = ({
         });
       }
     } catch (error) {
-      console.error('Error zooming to petak:', error);
+      // console.error('Error zooming to petak:', error);
+      // console.error('Error details:', error.message, error.stack);
       // Fallback: zoom to a reasonable level
       const view = mapInstance.current.getView();
       view.animate({
@@ -241,7 +297,7 @@ const DataPanel = ({
             await onDeletePetak(petakId);
             // console.log('DataPanel: Database delete completed');
           } else {
-            console.warn('onDeletePetak function not provided');
+            // console.warn('onDeletePetak function not provided');
           }
         } else {
           // Remove from selected list
@@ -267,7 +323,7 @@ const DataPanel = ({
         );
       }
     } catch (error) {
-      console.error('Error deleting petak:', error);
+      // console.error('Error deleting petak:', error);
       Swal.fire(
         'Error!',
         'Gagal menghapus petak.',
@@ -319,6 +375,25 @@ const DataPanel = ({
         </Box>
       )}
 
+      {/* Total Area for MapViewClaim */}
+      {source === 'MapViewClaim' && (
+        <Box mt={1} p={isMobile ? 1 : 1.5} borderRadius={1} sx={{ 
+          backgroundColor: '#e3f2fd',
+          border: '1px solid #90caf9',
+          mb: 2
+        }}>
+          <Typography variant={isMobile ? "body2" : "body1"} sx={{ 
+            color: '#1565c0',
+            fontWeight: 'bold',
+            fontSize: isMobile ? '0.875rem' : '1rem'
+          }}>
+            Total Luas Terdaftar: {(
+              (Array.isArray(listPetak) ? listPetak : []).reduce((sum, p) => sum + parseFloat(p.luas || 0), 0)
+            ).toFixed(2)} ha
+          </Typography>
+        </Box>
+      )}
+
       {/* Status indicator for MapRegister */}
       {(source === 'MapRegister' || source === 'MapClaim') && (
         <Box mt={1} p={isMobile ? 1 : 1.5} borderRadius={1} sx={{ 
@@ -331,18 +406,46 @@ const DataPanel = ({
             fontWeight: 'bold',
             fontSize: isMobile ? '0.875rem' : '1rem'
           }}>
-            Status: {((listPetak ? listPetak.length : 0) + selectedPercils.length) >= formData.jmlPetak 
-              ? `Tidak dapat memilih petak baru (${(listPetak ? listPetak.length : 0) + selectedPercils.length}/${formData.jmlPetak})`
-              : `Dapat memilih petak (${(listPetak ? listPetak.length : 0) + selectedPercils.length}/${formData.jmlPetak})`
-            }
+            Status: {isLoading ? 'Memuat data...' : (
+              ((listPetak ? listPetak.length : 0) + selectedPercils.length) >= formData.jmlPetak 
+                ? `Tidak dapat memilih petak baru (${(listPetak ? listPetak.length : 0) + selectedPercils.length}/${formData.jmlPetak})`
+                : `Dapat memilih petak (${(listPetak ? listPetak.length : 0) + selectedPercils.length}/${formData.jmlPetak})`
+            )}
           </Typography>
+          {isLoading && (
+            <Typography variant="caption" sx={{ color: '#666', display: 'block', mt: 0.5 }}>
+              Memvalidasi data tersimpan...
+            </Typography>
+          )}
+          {!isLoading && (
+            <Typography variant="caption" sx={{ color: '#666', display: 'block', mt: 0.5 }}>
+              Data terdaftar: {listPetak ? listPetak.length : 0} petak tersimpan
+            </Typography>
+          )}
         </Box>
       )}
 
       {/* Lahan Terdaftar Section */}
-      <Typography variant={isMobile ? "body2" : "body1"} style={{ marginTop: '1rem', marginBottom: '0.5rem' }}>
-        <strong>Lahan Terdaftar</strong>
-      </Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 2, mb: 0.5 }}>
+        <Typography variant={isMobile ? "body2" : "body1"}>
+          <strong>Lahan Terdaftar</strong>
+        </Typography>
+        {/* Debug info */}
+   {/*      <Typography variant="caption" sx={{ color: 'red', fontSize: '10px' }}>
+          Debug: {listPetak ? `Array(${listPetak.length})` : 'null/undefined'}
+        </Typography> */}
+        {onRefreshData && (
+          <IconButton
+            onClick={onRefreshData}
+            size="small"
+            color="primary"
+            disabled={isLoading}
+            title="Refresh data dari database"
+          >
+            <RefreshIcon fontSize="small" />
+          </IconButton>
+        )}
+      </Box>
       
       {listPetak && listPetak.length > 0 ? (
         <>
@@ -484,7 +587,14 @@ const DataPanel = ({
           )}
         </>
       ) : (
-        <Typography variant={isMobile ? "body2" : "body1"}>Belum Ada Lahan Terdaftar</Typography>
+        <Box>
+          <Typography variant={isMobile ? "body2" : "body1"}>Belum Ada Lahan Terdaftar</Typography>
+          {source === 'MapViewClaim' && !formData.noPolis && (
+            <Typography variant="caption" sx={{ color: 'orange', display: 'block', mt: 1 }}>
+              ⚠️ Nomor Polis tidak tersedia - tidak dapat memuat data klaim
+            </Typography>
+          )}
+        </Box>
       )}
 
       <Divider style={{ margin: '1rem 0' }} />

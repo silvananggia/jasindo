@@ -153,3 +153,13 @@ export const getPetakKlaimID = (id) => async (dispatch) => {
         console.log(err);
     }
 };
+
+export const checkPercilAvailability = (idpetak, musim_tanam, tgl_tanam) => async (dispatch) => {
+    try {
+        const res = await PetakService.checkPercilAvailability(idpetak, musim_tanam, tgl_tanam);
+        return Promise.resolve(res.data);
+    } catch (err) {
+        console.log(err);
+        return Promise.reject(err);
+    }
+};

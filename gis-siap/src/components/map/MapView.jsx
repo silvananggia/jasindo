@@ -31,7 +31,7 @@ const MapRegister = () => {
   const { loading, errmessage } = useSelector((state) => state.auth);
   const listPetak  = useSelector((state) => state.petak.petaklist);
 
-  const { formData, setFormData } = useURLParams();
+  const { formData, setFormData, isDataLoaded } = useURLParams();
 
   const [searchInput, setSearchInput] = useState(formData.address);
   const [selectedPercils, setSelectedPercils] = useState([]);
@@ -85,22 +85,61 @@ const MapRegister = () => {
     `function_zxy_id_petakuser/{z}/{x}/{y}?id=${formData.nik}`,
   );
 
+  // Global message debug handler
+  useEffect(() => {
+    const debugMessageHandler = (e) => {
+      console.log("MapView - DEBUG: All messages received:", e.data);
+      console.log("MapView - DEBUG: Message origin:", e.origin);
+      console.log("MapView - DEBUG: Message timestamp:", new Date().toISOString());
+    };
+
+    console.log("MapView - Adding debug message event listener");
+    window.addEventListener('message', debugMessageHandler);
+    
+    return () => {
+      console.log("MapView - Removing debug message event listener");
+      window.removeEventListener('message', debugMessageHandler);
+    };
+  }, []);
+
+  // Fallback message handler for iframe data
   useEffect(() => {
     const handleMessage = (e) => {
-      if (e.data && e.data.nik) {
-        setFormData(e.data);
-        setSearchInput(e.data.address);
+      console.log("MapView - Fallback message handler received:", e.data);
+      console.log("MapView - Message origin:", e.origin);
+      
+      // Only process if useURLParams hasn't already processed this data
+      if (e.data && (e.data.nik || e.data.idKelompok) && !isDataLoaded) {
+        console.log("MapView - Processing message in fallback handler:", e.data);
+        
+        // Map tanggalTanam to tglKejadian if available
+        const processedData = {
+          ...e.data,
+          tglKejadian: e.data.tanggalTanam || e.data.tglKejadian || ''
+        };
+        
+        console.log("MapView - Setting formData via fallback:", processedData);
+        setFormData(processedData);
+        setSearchInput(processedData.address || '');
+        
+        // Trigger search if map is ready
         setTimeout(() => {
-          if (mapInstance.current) {
-            handleSearch(e.data.address, mapInstance.current, process.env.REACT_APP_GOOGLE_API_KEY);
+          if (mapInstance.current && processedData.address) {
+            console.log("MapView - Triggering search from fallback:", processedData.address);
+            handleSearch(processedData.address, mapInstance.current, process.env.REACT_APP_GOOGLE_API_KEY);
           }
         }, 1000);
       }
     };
 
+    console.log("MapView - Adding fallback message event listener");
     window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, [mapInstance, setFormData]);
+    
+    return () => {
+      console.log("MapView - Removing fallback message event listener");
+      window.removeEventListener('message', handleMessage);
+    };
+  }, [isDataLoaded, mapInstance, setFormData]);
 
   useEffect(() => {
     setTotalArea(selectedPercils.reduce(
@@ -110,6 +149,12 @@ const MapRegister = () => {
   }, [selectedPercils]);
 
   useEffect(() => {
+    // First check if all required data is loaded
+    if (!isDataLoaded) {
+      setIsValid(false);
+      return;
+    }
+
     if (selectedPercils.length > formData.jmlPetak) {
       setAlertMessage(`Jumlah petak terpilih saat ini ${selectedPercils.length}, tidak dapat lebih dari ${formData.jmlPetak}`);
       setAlertOpen(true);
@@ -127,7 +172,7 @@ const MapRegister = () => {
     } else {
       setIsValid(true);
     }
-  }, [selectedPercils, totalArea, formData.jmlPetak, formData.luasLahan]);
+  }, [selectedPercils, totalArea, formData.jmlPetak, formData.luasLahan, isDataLoaded]);
 
   useEffect(() => {
     if (polygonLayerRef.current) {
@@ -170,6 +215,9 @@ const MapRegister = () => {
       nik: formData.nik,
       idpetak: p.id,
       luas: p.area,
+      musim_tanam: formData.musimTanam || 'MT1', // Default value if not provided
+      tgl_tanam: formData.tanggalTanam || new Date().toISOString().split('T')[0], // Default to today
+      tgl_panen: formData.tanggalPanen || new Date(Date.now() + 90*24*60*60*1000).toISOString().split('T')[0], // Default to 90 days from now
       geometry: p.geometry,
     }));
 
@@ -193,26 +241,109 @@ const MapRegister = () => {
   // Update polygon layer when formData changes
   useEffect(() => {
     if (!polygonLayerRef.current || !mapInstance.current) return;
+    
+    // Validate that we have the required data
+    if (!formData.nik || formData.nik.trim() === '') {
+      console.log("MapView - No NIK available, skipping tile layer update");
+      return;
+    }
 
-    setTileUrl(`function_zxy_id_petakuser/{z}/{x}/{y}?id=${formData.nik}`);
+    const newTileUrl = `function_zxy_id_petakuser/{z}/{x}/{y}?id=${formData.nik}`;
+    console.log("MapView - Updating tile URL:", newTileUrl);
+    
+    // Check if REACT_APP_TILE_URL is defined
+    const baseTileUrl = process.env.REACT_APP_TILE_URL;
+    if (!baseTileUrl) {
+      console.error("MapView - REACT_APP_TILE_URL environment variable is not defined");
+      return;
+    }
+
+    setTileUrl(newTileUrl);
 
     // Create new source with updated URL
+    const fullTileUrl = `${baseTileUrl}/${newTileUrl}`;
+    console.log("MapView - Full tile URL:", fullTileUrl);
+    
     const newSource = new VectorTileSource({
       format: new MVT(),
-      url: `${process.env.REACT_APP_TILE_URL}/${tileUrl}`,
+      url: fullTileUrl,
     });
 
     // Update the layer's source
     polygonLayerRef.current.setSource(newSource);
+    polygonLayerRef.current.setVisible(true); // Make sure layer is visible
     polygonLayerRef.current.changed();
 
-  }, [formData.idkec, formData.nik, formData.idkab, mapInstance, polygonLayerRef,tileUrl]);
+  }, [formData.idkec, formData.nik, formData.idkab, mapInstance, polygonLayerRef]);
 
   useAuthListener();
 
   useEffect(() => {
-    dispatch(getPetakUser(formData.nik));
-  }, [formData.nik, dispatch]);
+    console.log("MapView - Current formData:", formData);
+    console.log("MapView - isDataLoaded:", isDataLoaded);
+    console.log("MapView - Environment variables:", {
+      REACT_APP_TILE_URL: process.env.REACT_APP_TILE_URL,
+      REACT_APP_GOOGLE_API_KEY: process.env.REACT_APP_GOOGLE_API_KEY ? 'SET' : 'NOT SET'
+    });
+    
+    if (formData.nik && formData.nik.trim() !== '') {
+      console.log("MapView - Fetching petak data for NIK:", formData.nik);
+      dispatch(getPetakUser(formData.nik));
+    } else {
+      console.log("MapView - No NIK available, skipping petak data fetch");
+    }
+  }, [formData.nik, dispatch, formData, isDataLoaded]);
+
+  // Aggressive data request mechanism
+  useEffect(() => {
+    if (!isDataLoaded) {
+      console.log("MapView - Data not loaded, requesting from parent iframe");
+      
+      const requestData = () => {
+        console.log("MapView - Requesting data from parent iframe");
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({ type: 'REQUEST_DATA' }, '*');
+        }
+      };
+      
+      // Request data multiple times with increasing intervals
+      const intervals = [100, 500, 1000, 2000, 5000];
+      intervals.forEach((delay, index) => {
+        setTimeout(() => {
+          if (!isDataLoaded) {
+            console.log(`MapView - Data request attempt ${index + 1}`);
+            requestData();
+          }
+        }, delay);
+      });
+    }
+  }, [isDataLoaded]);
+
+  // Manual data loading for debugging
+  useEffect(() => {
+    // Add a global function for manual testing
+    window.testDataLoading = () => {
+      console.log("MapView - Manual test: Setting test data");
+      const testData = {
+        nik: '312328-021093-0456',
+        nama: 'Ata',
+        address: 'Desa Dukuh',
+        idkab: '3201',
+        idkec: '320101',
+        jmlPetak: 5,
+        luasLahan: 2.5,
+        musimTanam: 'MT1',
+        tanggalTanam: '2025-09-09',
+        tanggalPanen: '2025-12-31'
+      };
+      
+      console.log("MapView - Manual test: Setting formData with test data:", testData);
+      setFormData(testData);
+      setSearchInput(testData.address);
+    };
+    
+    console.log("MapView - Manual test function available: window.testDataLoading()");
+  }, [setFormData]);
 
   if (loading) {
     return <Spinner className="content-loader" />;

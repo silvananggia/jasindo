@@ -224,6 +224,9 @@ const MapAnalytic = () => {
       nik: formData.nik,
       idpetak: p.id,
       luas: p.area,
+      musim_tanam: formData.musimTanam || 'MT1', // Default value if not provided
+      tgl_tanam: formData.tanggalTanam || new Date().toISOString().split('T')[0], // Default to today
+      tgl_panen: formData.tanggalPanen || new Date(Date.now() + 90*24*60*60*1000).toISOString().split('T')[0], // Default to 90 days from now
       geometry: p.geometry,
     }));
 
@@ -276,14 +279,15 @@ const MapAnalytic = () => {
   },[formData.idKelompok]);
   // Update polygon layer when formData changes
   useEffect(() => {
-    if (!polygonLayerRef.current || !mapInstance.current) return;
+    if (!polygonLayerRef.current || !mapInstance.current || !formData.nik) return;
 
-    setTileUrl(`function_zxy_id_petakuser/{z}/{x}/{y}?id=${formData.nik}`);
+    const tileUrlPath = `function_zxy_id_petakuser/{z}/{x}/{y}?id=${formData.nik}`;
+    setTileUrl(tileUrlPath);
 
     // Create new source with updated URL
     const newSource = new VectorTileSource({
       format: new MVT(),
-      url: `${process.env.REACT_APP_TILE_URL}/${tileUrl}`,
+      url: `${process.env.REACT_APP_TILE_URL}/${tileUrlPath}`,
     });
 
     // Update the layer's source
@@ -295,7 +299,6 @@ const MapAnalytic = () => {
     formData.idkab,
     mapInstance,
     polygonLayerRef,
-    tileUrl,
   ]);
 
   const scrollToDate = (index) => {

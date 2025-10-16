@@ -2,7 +2,7 @@ import 'ol/ol.css';
 import "ol-ext/dist/ol-ext.css";
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { Autocomplete } from '@react-google-maps/api';
+// import { Autocomplete } from '@react-google-maps/api';
 import { Box, Tabs, Tab, IconButton, Snackbar, Alert } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import ListIcon from '@mui/icons-material/List';
@@ -34,11 +34,14 @@ const MapRegister = () => {
   const { loading: klaimLoading } = useSelector((state) => state.klaim);
   const listKlaim = useSelector((state) => state.klaim.klaimlist);
 
-  const { formData, setFormData } = useURLParams();
+  const { formData, setFormData, isDataLoaded } = useURLParams();
 
   const [searchInput, setSearchInput] = useState(formData.address);
   const [selectedPercils, setSelectedPercils] = useState([]);
   const [autocomplete, setAutocomplete] = useState(null);
+  const [autocompleteService, setAutocompleteService] = useState(null);
+  const [placesService, setPlacesService] = useState(null);
+  const [isGoogleMapsLoaded, setIsGoogleMapsLoaded] = useState(false);
   const [selectedBasemap, setSelectedBasemap] = useState("map-switch-basic");
   const [tabValue, setTabValue] = useState(0);
   const [isPolygonVisible, setIsPolygonVisible] = useState(true);
@@ -49,8 +52,32 @@ const MapRegister = () => {
   const [alertMessage, setAlertMessage] = useState('');
   const [tileUrl, setTileUrl] = useState();
 
-  // Function to simulate iframe message
-  
+  // Check if Google Maps API is loaded
+  useEffect(() => {
+    let attempts = 0;
+    const maxAttempts = 100; // 10 seconds max
+    
+    const checkGoogleMaps = () => {
+      attempts++;
+      if (window.google && window.google.maps && window.google.maps.places && window.google.maps.places.Autocomplete) {
+        // Initialize Google Maps services
+        const autocompleteService = new window.google.maps.places.AutocompleteService();
+        const placesService = new window.google.maps.places.PlacesService(document.createElement('div'));
+        setAutocompleteService(autocompleteService);
+        setPlacesService(placesService);
+        setIsGoogleMapsLoaded(true);
+      } else if (attempts < maxAttempts) {
+        // Retry after a short delay
+        setTimeout(checkGoogleMaps, 100);
+      } else {
+        // Still set to true to show the input field without autocomplete
+        setIsGoogleMapsLoaded(true);
+      }
+    };
+    
+    // Start checking after a small delay to allow the script to load
+    setTimeout(checkGoogleMaps, 200);
+  }, []);
 
   const handlePercilSelect = useCallback(async (percilData) => {
     try {
@@ -142,6 +169,18 @@ const MapRegister = () => {
   }, [selectedPercils]);
 
   useEffect(() => {
+    // First check if all required data is loaded
+    if (!isDataLoaded) {
+      setIsValid(false);
+      return;
+    }
+
+    // Check if klaim data is still loading
+    if (klaimLoading) {
+      setIsValid(false);
+      return;
+    }
+
     const totalRegisteredKlaim = (listKlaim || []).length;
     const totalSelectedPetak = selectedPercils.length;
     const totalPetak = totalRegisteredKlaim + totalSelectedPetak;
@@ -163,7 +202,7 @@ const MapRegister = () => {
     } else {
       setIsValid(true);
     }
-  }, [selectedPercils, totalArea, formData.jmlPetak, formData.luasLahan, listKlaim]);
+  }, [selectedPercils, totalArea, formData.jmlPetak, formData.luasLahan, listKlaim, isDataLoaded, klaimLoading]);
 
   useEffect(() => {
     if (polygonLayerRef.current) {
@@ -208,15 +247,40 @@ const MapRegister = () => {
     setTabValue(newValue);
   };
 
-  const handlePlaceChange = () => {
-    const place = autocomplete.getPlace();
-    if (place.geometry) {
+  const handlePlaceChange = (place) => {
+    if (place && place.geometry) {
       const location = place.geometry.location;
       mapInstance.current.getView().animate({
         center: fromLonLat([location.lng(), location.lat()]),
         zoom: 15,
         duration: 1000,
       });
+    }
+  };
+
+  const handleInputChange = (e) => {
+    const value = e.target.value;
+    setSearchInput(value);
+    
+    if (value.length > 2 && autocompleteService) {
+      autocompleteService.getPlacePredictions(
+        {
+          input: value,
+          componentRestrictions: { country: 'id' }, // Restrict to Indonesia
+        },
+        (predictions, status) => {
+          if (status === window.google.maps.places.PlacesServiceStatus.OK && predictions) {
+            // You can implement a dropdown here if needed
+            // For now, we'll just handle the search on Enter key
+          }
+        }
+      );
+    }
+  };
+
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter' && searchInput.trim()) {
+      handleSearch(searchInput, mapInstance.current, process.env.REACT_APP_GOOGLE_API_KEY);
     }
   };
 
@@ -227,6 +291,7 @@ const MapRegister = () => {
       idpetak: p.id,
       luas: p.area,
       geometry: p.geometry,
+      tglKejadian: formData.tglKejadian,
     }));
 
     try {
@@ -269,20 +334,21 @@ const MapRegister = () => {
 
   // Update polygon layer when formData changes
   useEffect(() => {
-    if (!polygonLayerRef.current || !mapInstance.current) return;
+    if (!polygonLayerRef.current || !mapInstance.current || !formData.nik) return;
 
-    setTileUrl(`function_zxy_id_petakuser/{z}/{x}/{y}?id=${formData.nik}`);
+    const newTileUrl = `function_zxy_id_petakuser/{z}/{x}/{y}?id=${formData.nik}`;
+    setTileUrl(newTileUrl);
 
     // Create new source with updated URL
     const newSource = new VectorTileSource({
       format: new MVT(),
-      url: `${process.env.REACT_APP_TILE_URL}/${tileUrl}`,
+      url: `${process.env.REACT_APP_TILE_URL}/${newTileUrl}`,
     });
 
     // Update the layer's source
     polygonLayerRef.current.setSource(newSource);
     polygonLayerRef.current.changed();
-  }, [formData.idkec, formData.nik, formData.idkab, mapInstance, polygonLayerRef, tileUrl]);
+  }, [formData.idkec, formData.nik, formData.idkab, mapInstance, polygonLayerRef]);
 
   useAuthListener();
 
@@ -385,25 +451,21 @@ const MapRegister = () => {
           gap: '8px',
         }}
       >
-        <Autocomplete
-          onLoad={(autocompleteInstance) => setAutocomplete(autocompleteInstance)}
-          onPlaceChanged={handlePlaceChange}
-        >
-          <input
-            type="text"
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="Cari alamat"
-            style={{
-              flex: 1,
-              padding: '10px 15px',
-              borderRadius: '5px',
-              border: '1px solid #ccc',
-              outline: 'none',
-              width: '250px',
-            }}
-          />
-        </Autocomplete>
+        <input
+          type="text"
+          value={searchInput}
+          onChange={handleInputChange}
+          onKeyPress={handleKeyPress}
+          placeholder={isGoogleMapsLoaded ? "Cari alamat" : "Cari alamat (Loading...)"}
+          style={{
+            flex: 1,
+            padding: '10px 15px',
+            borderRadius: '5px',
+            border: '1px solid #ccc',
+            outline: 'none',
+            width: '250px',
+          }}
+        />
         <IconButton
           onClick={() => handleSearch(searchInput, mapInstance.current, process.env.REACT_APP_GOOGLE_API_KEY)}
           style={{

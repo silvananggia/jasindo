@@ -1,4 +1,4 @@
-import { Fill, Stroke, Style } from 'ol/style';
+import { Fill, Stroke, Style, Text } from 'ol/style';
 
 export const getPercilStyle = (selection, lockedIDs = [], isLimitReached = false) => (feature) => {
   const id = feature.get('psid');
@@ -12,6 +12,9 @@ export const getPercilStyle = (selection, lockedIDs = [], isLimitReached = false
     properties.kel_id, // This might be the actual petak identifier
     id
   ].filter(Boolean); // Remove undefined values
+
+  // Get the petak_id for display (prioritize petak_id, then idpetak, then psid)
+  const displayPetakId = properties.petak_id || properties.idpetak || properties.psid || id;
   
   // Check multiple ID formats for matching, including string conversion
   const isSelected = selection.some((p) => {
@@ -24,12 +27,12 @@ export const getPercilStyle = (selection, lockedIDs = [], isLimitReached = false
   );
   
   
-  let strokeColor = '#FF5733'; // Default red
-  let fillColor = 'rgba(255, 87, 51, 0.1)'; // Default red fill
+  let strokeColor = 'rgba(0, 255, 0, 0.3)';  // Green for selected and registered
+  let fillColor = 'rgba(0, 255, 0, 0.03)'; // Green fill
   
   if (isSelected || isLocked) {
-    strokeColor = '#00FF00'; // Green for selected and registered
-    fillColor = 'rgba(0, 255, 0, 0.1)'; // Green fill
+    strokeColor = '#FF5733'; // Default red
+    fillColor = 'rgba(255, 87, 51, 0.1)'; // Default red fill
   } else if (isLimitReached) {
     strokeColor = '#9E9E9E'; // Light gray for unavailable when limit reached
     fillColor = 'rgba(158, 158, 158, 0.05)'; // Very light gray fill
@@ -43,5 +46,19 @@ export const getPercilStyle = (selection, lockedIDs = [], isLimitReached = false
     fill: new Fill({
       color: fillColor,
     }),
+    text: new Text({
+      text: displayPetakId ? displayPetakId.toString() : '',
+      font: '10px Arial, sans-serif',
+      fill: new Fill({
+        color: '#FFFFFF',
+      }),
+      stroke: new Stroke({
+        color: '#000000',
+        width: 1
+      }),
+      offsetY: 0,
+      textAlign: 'center',
+      textBaseline: 'middle'
+    })
   });
 }; 

@@ -43,7 +43,7 @@ const MapAnalytic = () => {
   const { anggotalist, loading: anggotaLoading } = useSelector((state) => state.anggota);
   const { petaklist, loading: petakLoading } = useSelector((state) => state.petak);
 
-  const { formData, setFormData } = useURLParams();
+  const { formData, setFormData, isDataLoaded } = useURLParams();
 
   const [searchInput, setSearchInput] = useState(formData.address);
   const [selectedPercils, setSelectedPercils] = useState([]);
@@ -146,6 +146,12 @@ const MapAnalytic = () => {
   }, [selectedPercils]);
 
   useEffect(() => {
+    // First check if all required data is loaded
+    if (!isDataLoaded) {
+      setIsValid(false);
+      return;
+    }
+
     if (selectedPercils.length > formData.jmlPetak) {
       setAlertMessage(
         `Jumlah petak terpilih saat ini ${selectedPercils.length}, tidak dapat lebih dari ${formData.jmlPetak}`
@@ -169,7 +175,7 @@ const MapAnalytic = () => {
     } else {
       setIsValid(true);
     }
-  }, [selectedPercils, totalArea, formData.jmlPetak, formData.luasLahan]);
+  }, [selectedPercils, totalArea, formData.jmlPetak, formData.luasLahan, isDataLoaded]);
 
   useEffect(() => {
     if (polygonLayerRef.current) {
@@ -200,6 +206,9 @@ const MapAnalytic = () => {
       nik: formData.nik,
       idpetak: p.id,
       luas: p.area,
+      musim_tanam: formData.musimTanam || 'MT1', // Default value if not provided
+      tgl_tanam: formData.tanggalTanam || new Date().toISOString().split('T')[0], // Default to today
+      tgl_panen: formData.tanggalPanen || new Date(Date.now() + 90*24*60*60*1000).toISOString().split('T')[0], // Default to 90 days from now
       geometry: p.geometry,
     }));
 

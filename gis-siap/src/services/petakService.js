@@ -46,6 +46,10 @@ const deletePetak = (id) => {
   return axios.delete(`/petak/${id}`, { headers: authHeader() });
 };
 
+const checkPercilAvailability = (idpetak, musim_tanam, tgl_tanam) => {
+  return axios.get(`/check-percil-availability?idpetak=${idpetak}&musim_tanam=${musim_tanam}&tgl_tanam=${tgl_tanam}`);
+};
+
 const PetakService = {
     getPetakAll,
     getPetakUser,
@@ -56,7 +60,8 @@ const PetakService = {
     getPetakKlaimID,
     createPetak,
     updatePetak,
-    deletePetak
+    deletePetak,
+    checkPercilAvailability
 };
 
 export default PetakService;

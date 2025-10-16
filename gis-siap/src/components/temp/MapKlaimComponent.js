@@ -221,13 +221,13 @@ const MapRegister = () => {
     const isSelected = selection.some((p) => p.id === id);
     return new Style({
       stroke: new Stroke({
-        color: isSelected ? '#00FF00' : '#FF5733',
+        color: isSelected ? '#FF5733' : '#00FF00',
         width: 2,
       }),
       fill: new Fill({
         color: isSelected
-          ? 'rgba(0, 255, 0, 0.3)'
-          : 'rgba(255, 87, 51, 0.3)',
+          ?
+          'rgba(255, 87, 51, 0.3)' : 'rgba(0, 255, 0, 0.3)',
       }),
     });
   };
@@ -266,7 +266,7 @@ const MapRegister = () => {
       target: mapRef.current,
       layers: [basemapLayerRef.current, polygonLayerRef.current],
       view: new View({
-        center: fromLonLat([107.6237476,  -6.3292777]),
+        center: fromLonLat([107.6237476, -6.3292777]),
         zoom: 16,
 
       }),
@@ -380,7 +380,7 @@ const MapRegister = () => {
 
     const luasLahanFloat = parseFloat(formData.luasLahan);
     const areaLimit = luasLahanFloat + (luasLahanFloat * 0.25);
-    
+
     console.log(areaLimit);
     if (totalArea > areaLimit) {
       setAlertMessage(`Total area terpilih (${totalArea.toFixed(2)} ha), batas toleransi yang diizinkan (${areaLimit.toFixed(2)} ha)`);
@@ -441,6 +441,9 @@ const MapRegister = () => {
       nik: formData.nik,
       idpetak: p.id,
       luas: p.area,
+      musim_tanam: formData.musimTanam || 'MT1', // Default value if not provided
+      tgl_tanam: formData.tanggalTanam || new Date().toISOString().split('T')[0], // Default to today
+      tgl_panen: formData.tanggalPanen || new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Default to 90 days from now
       geometry: p.geometry,
     }));
 

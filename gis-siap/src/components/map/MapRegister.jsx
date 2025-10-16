@@ -24,7 +24,7 @@ import useSwipeGesture from '../../hooks/useSwipeGesture';
 import { createBasemapLayer } from '../../utils/mapUtils';
 import { handleSearch } from '../../utils/mapUtils';
 import { getPercilStyle } from '../../utils/percilStyles';
-import { createPetak, getPetakID, getPetakUser, deletePetak, getPetakById, getCenterPetakUser } from '../../actions/petakActions';
+import { createPetak, getPetakID, getPetakUser, deletePetak, getPetakById, getCenterPetakUser, checkPercilAvailability } from '../../actions/petakActions';
 import BasemapSwitcher from './BasemapSwitcher';
 import GeolocationControl from './GeolocationControl';
 import Spinner from '../Spinner/Loading-spinner';
@@ -43,7 +43,7 @@ const MapRegister = () => {
   const listPetak = useSelector((state) => state.petak.petaklist);
 
 
-  const { formData, setFormData } = useURLParams();
+  const { formData, setFormData, isDataLoaded } = useURLParams();
   
   // Create a ref to store the current jmlPetak value to avoid closure issues
   const jmlPetakRef = useRef(0);
@@ -149,14 +149,14 @@ const MapRegister = () => {
   const handlePercilSelect = useCallback(async (percilData) => {
     try {
       // Log all parcel attributes to console
-      // console.log('=== PARCEL SELECTED - ALL ATTRIBUTES ===');
-      // console.log('Percil Data:', percilData);
-      // console.log('All Properties:', Object.keys(percilData));
-      // console.log('Property Details:');
-      // Object.entries(percilData).forEach(([key, value]) => {
-      //   console.log(`  ${key}:`, value, `(type: ${typeof value})`);
-      // });
-      // console.log('==========================================');
+      console.log('=== PARCEL SELECTED - ALL ATTRIBUTES ===');
+      console.log('Percil Data:', percilData);
+      console.log('All Properties:', Object.keys(percilData));
+      console.log('Property Details:');
+      Object.entries(percilData).forEach(([key, value]) => {
+        console.log(`  ${key}:`, value, `(type: ${typeof value})`);
+      });
+      console.log('==========================================');
       
       // Use the ref to get the current jmlPetak value
       const currentJmlPetak = jmlPetakRef.current;
@@ -191,6 +191,38 @@ const MapRegister = () => {
           setAlertOpen(true);
           return;
         }
+      }
+
+      // Check if user already has this percil for the same musim_tanam and year
+      const currentMusimTanam = formData.musimTanam || 'MT1';
+      const currentTanggalTanam = formData.tanggalTanam || new Date().toISOString().split('T')[0];
+      
+      // Debug: Log the values being used for validation
+      const percilId = percilData.petak_id || percilData.psid || percilData.id || percilData.persilid;
+/*       console.log('=== VALIDATION DEBUG ===');
+      console.log('percilId (petak_id):', percilId);
+      console.log('currentMusimTanam:', currentMusimTanam);
+      console.log('currentTanggalTanam:', currentTanggalTanam);
+      console.log('========================'); */
+      
+      try {
+        const availabilityCheck = await dispatch(checkPercilAvailability(
+          percilId, 
+          currentMusimTanam, 
+          currentTanggalTanam
+        ));
+        
+        console.log('Availability check result:', availabilityCheck);
+        
+        if (!availabilityCheck.data.isAvailable) {
+          const year = new Date(currentTanggalTanam).getFullYear();
+          setAlertMessage(`Tidak dapat memilih lahan ini. Lahan sudah terdaftar untuk musim tanam ${currentMusimTanam} tahun ${year}.`);
+          setAlertOpen(true);
+          return;
+        }
+      } catch (error) {
+        console.error('Error checking percil availability:', error);
+        // Continue with selection if check fails (graceful degradation)
       }
 
       setSelectedPercils((prev) => {
@@ -239,6 +271,18 @@ const MapRegister = () => {
   }, [selectedPercils]);
 
   useEffect(() => {
+    // First check if all required data is loaded
+    if (!isDataLoaded) {
+      setIsValid(false);
+      return;
+    }
+
+    // Check if registered land data is still loading
+    if (petakLoading) {
+      setIsValid(false);
+      return;
+    }
+
     if (jmlPetak) {
       const totalRegisteredPetak = (listPetak || []).length;
       const totalSelectedPetak = selectedPercils.length;
@@ -262,7 +306,7 @@ const MapRegister = () => {
         setIsValid(true);
       }
     }
-  }, [selectedPercils, totalArea, jmlPetak, luasLahan, listPetak]);
+  }, [selectedPercils, totalArea, jmlPetak, luasLahan, listPetak, isDataLoaded, petakLoading]);
 
   useEffect(() => {
     if (polygonLayerRef.current) {
@@ -292,6 +336,9 @@ const MapRegister = () => {
       nik: nik,
       idpetak: p.petak_id,
       luas: p.area,
+      musim_tanam: formData.musimTanam || 'MT1', // Default value if not provided
+      tgl_tanam: formData.tanggalTanam || new Date().toISOString().split('T')[0], // Default to today
+      tgl_panen: formData.tanggalPanen || new Date(Date.now() + 90*24*60*60*1000).toISOString().split('T')[0], // Default to 90 days from now
       geometry: p.geometry,
     }));
 
@@ -302,7 +349,7 @@ const MapRegister = () => {
       setSelectedPercils([]);
 
       // Refresh the petak list to show newly saved petak in "Lahan Terdaftar"
-      await dispatch(getPetakUser(nik));
+      await refreshPetakData();
 
       Swal.fire({
         icon: "success",
@@ -324,7 +371,7 @@ const MapRegister = () => {
       await dispatch(deletePetak(petakId));
       
       // Refresh the petak list after deletion
-      await dispatch(getPetakUser(nik));
+      await refreshPetakData();
     } catch (error) {
       console.error("Error deleting petak:", error);
       throw error; // Re-throw to be handled by the DataPanel
@@ -453,21 +500,50 @@ const MapRegister = () => {
     }
   }, [mapInstance, nik, dispatch]);
 
+  // Function to refresh petak data from database
+  const refreshPetakData = useCallback(async () => {
+    if (!nik || typeof nik !== 'string' || nik.trim() === '') return;
+    
+    try {
+      const result = await dispatch(getPetakUser(nik));
+      console.log('Petak data refreshed from database:', result?.data?.data?.length || 0, 'records');
+      return result;
+    } catch (error) {
+      console.error('Error refreshing petak data:', error);
+      return null;
+    }
+  }, [nik, dispatch]);
+
   useEffect(() => {
     // Ensure nik is loaded and map is ready before attempting to fetch and zoom
     if (!mapInstance.current) return;
     if (!nik || typeof nik !== 'string' || nik.trim() === '') return;
 
-    dispatch(getPetakUser(nik)).then((result) => {
-      // After getting petak data, zoom to the data extent
-      setTimeout(() => {
-        // Pass the petak list directly to avoid dependency on listPetak state
-        // getPetakUser returns res.data => { code, status, data: [...] }
-        const petakList = result?.data?.data || [];
-        zoomToPetakData(petakList);
-      }, 500); // Small delay to ensure data is loaded
+    refreshPetakData().then((result) => {
+      if (result) {
+        // After getting petak data, zoom to the data extent
+        setTimeout(() => {
+          // Pass the petak list directly to avoid dependency on listPetak state
+          // getPetakUser returns res.data => { code, status, data: [...] }
+          const petakList = result?.data?.data || [];
+          zoomToPetakData(petakList);
+        }, 500); // Small delay to ensure data is loaded
+      }
     });
-  }, [nik, dispatch, zoomToPetakData, mapInstance]);
+  }, [nik, dispatch, zoomToPetakData, mapInstance, refreshPetakData]);
+
+  // Periodic refresh of petak data to ensure real-time validation
+  useEffect(() => {
+    if (!nik || typeof nik !== 'string' || nik.trim() === '') return;
+
+    // Refresh data every 30 seconds to ensure real-time validation
+    const refreshInterval = setInterval(() => {
+      console.log('Periodic refresh of petak data...');
+      refreshPetakData();
+    }, 30000); // 30 seconds
+
+    return () => clearInterval(refreshInterval);
+  }, [nik, refreshPetakData]);
 
   if (loading) {
     return <Spinner className="content-loader" />;
@@ -495,6 +571,29 @@ const MapRegister = () => {
       )}
 
       <GeolocationControl mapInstance={mapInstance.current} isMobile={isMobile} />
+
+      {/* Disclaimer Box */}
+      <div
+        style={{
+          position: 'absolute',
+          bottom: '20px',
+          left: '20px',
+          backgroundColor: 'rgba(255, 255, 255, 0.95)',
+          padding: '8px 12px',
+          borderRadius: '8px',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+          zIndex: 1000,
+          backdropFilter: 'blur(10px)',
+          border: '1px solid rgba(0,0,0,0.1)',
+          fontSize: '10px',
+          color: '#666',
+          fontWeight: '500',
+          maxWidth: '300px',
+          textAlign: 'center'
+        }}
+      >
+        Peta ini menampilkan bentuk petak sawah secara indikatif. Perbedaan dengan kondisi sebenarnya di lapangan mungkin terjadi.
+      </div>
 
       {/* Hamburger Menu Button - Only visible on mobile */}
       {isMobile && (
@@ -632,6 +731,7 @@ const MapRegister = () => {
                 listPetak={listPetak}
                 isLoading={petakLoading}
                 onDeletePetak={handleDeletePetak}
+                onRefreshData={refreshPetakData}
                 isMobile={isMobile}
                 isTablet={isTablet}
                 mapInstance={mapInstance}
@@ -709,6 +809,7 @@ const MapRegister = () => {
                 listPetak={listPetak}
                 isLoading={petakLoading}
                 onDeletePetak={handleDeletePetak}
+                onRefreshData={refreshPetakData}
                 isMobile={isMobile}
                 isTablet={isTablet}
                 mapInstance={mapInstance}
