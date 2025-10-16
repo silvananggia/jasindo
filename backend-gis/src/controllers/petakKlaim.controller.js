@@ -233,7 +233,6 @@ exports.getPetakKlaimByNikGeoJSON = async (req, res) => {
         id,
         nik,
         nopolis,
-        idpetak,
         luas,
         ST_AsGeoJSON(ST_Transform(geometry, 4326))::json AS geometry
       FROM petak_klaim
@@ -256,7 +255,7 @@ exports.getPetakKlaimByNikGeoJSON = async (req, res) => {
       type: "Feature",
       properties: {
         id: row.id,
-        idpetak: row.idpetak,
+        nopolis: row.nopolis,
         nik: row.nik,
         luas: parseFloat(row.luas)
       },
