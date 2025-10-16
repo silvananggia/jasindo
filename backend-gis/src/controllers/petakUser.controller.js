@@ -416,7 +416,6 @@ exports.getPetakUserByNikGeoJSON = async (req, res) => {
       `
       SELECT 
         id,
-        idpetak,
         nik,
         luas,
         ST_AsGeoJSON(ST_Transform(geometry, 4326))::json AS geometry
@@ -440,7 +439,6 @@ exports.getPetakUserByNikGeoJSON = async (req, res) => {
       type: "Feature",
       properties: {
         id: row.id,
-        idpetak: row.idpetak,
         nik: row.nik,
         luas: parseFloat(row.luas)
       },
@@ -484,6 +482,7 @@ exports.checkPercilAvailability = async (req, res) => {
       `
       SELECT 
         id,
+        idpetak,
         nik,
         musim_tanam,
         tgl_tanam,
@@ -506,6 +505,7 @@ exports.checkPercilAvailability = async (req, res) => {
         isAvailable,
         existingRecord: existingRecord ? {
           id: existingRecord.id,
+          idpetak: existingRecord.idpetak,
           nik: existingRecord.nik,
           musim_tanam: existingRecord.musim_tanam,
           tgl_tanam: existingRecord.tgl_tanam,
