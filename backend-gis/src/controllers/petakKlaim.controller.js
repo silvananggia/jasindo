@@ -17,7 +17,7 @@ exports.savePetakKlaim = async (req, res) => {
 
   // Loop through each percils and prepare the values for insertion
   percils.forEach((percils, index) => {
-    const { nik, nopolis, idpetak, luas, geometry } = percils;
+    const { nik, nopolis, idpetak, luas, geometry, tglKejadian } = percils;
 
     if (!nik || !nopolis || !idpetak || !luas || !geometry) {
       return res.status(400).json({ error: `Missing required fields in percils ${index + 1}` });
@@ -26,12 +26,12 @@ exports.savePetakKlaim = async (req, res) => {
     const id = uuidv4(); // Generate a unique UUID for each percils
 
     // Prepare the query part and corresponding values for batch insert
-    insertValues.push(id, nik, nopolis, idpetak, luas, JSON.stringify(geometry));
-    insertQueryParts.push(`($${index * 6 + 1}, $${index * 6 + 2}, $${index * 6 + 3}, $${index * 6 + 4}, $${index * 6 + 5}, ST_GeomFromGeoJSON($${index * 6 + 6}))`);
+    insertValues.push(id, nik, nopolis, idpetak, luas, JSON.stringify(geometry), tglKejadian || null);
+    insertQueryParts.push(`($${index * 7 + 1}, $${index * 7 + 2}, $${index * 7 + 3}, $${index * 7 + 4}, $${index * 7 + 5}, ST_GeomFromGeoJSON($${index * 7 + 6}), $${index * 7 + 7})`);
   });
 
   const insertQuery = `
-      INSERT INTO petak_klaim (id, nik, nopolis, idpetak, luas, geometry)
+      INSERT INTO petak_klaim (id, nik, nopolis, idpetak, luas, geometry, tgl_kejadian)
       VALUES ${insertQueryParts.join(', ')}
   `;
 

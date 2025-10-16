@@ -32,22 +32,23 @@ exports.savePetakUser = async (req, res) => {
   const insertQueryParts = [];
 
   // Loop through each percils and prepare the values for insertion
-  percils.forEach((percils, index) => {
-    const { nik, idpetak, luas, geometry } = percils;
+  for (let index = 0; index < percils.length; index++) {
+    const percilsItem = percils[index];
+    const { nik, idpetak, luas, musim_tanam, tgl_tanam, tgl_panen, geometry } = percilsItem;
 
-    if (!nik || !idpetak || !luas || !geometry) {
+    if (!nik || !idpetak || !luas || !musim_tanam || !tgl_tanam || !tgl_panen || !geometry) {
       return res.status(400).json({ error: `Missing required fields in percils ${index + 1}` });
     }
 
     const id = uuidv4(); // Generate a unique UUID for each percils
 
     // Prepare the query part and corresponding values for batch insert
-    insertValues.push(id, nik, idpetak, luas, JSON.stringify(geometry));
-    insertQueryParts.push(`($${index * 5 + 1}, $${index * 5 + 2}, $${index * 5 + 3}, $${index * 5 + 4}, ST_GeomFromGeoJSON($${index * 5 + 5}))`);
-  });
+    insertValues.push(id, nik, idpetak, luas, musim_tanam, tgl_tanam, tgl_panen, JSON.stringify(geometry));
+    insertQueryParts.push(`($${index * 8 + 1}, $${index * 8 + 2}, $${index * 8 + 3}, $${index * 8 + 4}, $${index * 8 + 5}, $${index * 8 + 6}, $${index * 8 + 7}, ST_GeomFromGeoJSON($${index * 8 + 8}))`);
+  }
 
   const insertQuery = `
-      INSERT INTO petak_user (id, nik, idpetak, luas, geometry)
+      INSERT INTO petak_user (id, nik, idpetak, luas,musim_tanam, tgl_tanam, tgl_panen, geometry)
       VALUES ${insertQueryParts.join(', ')}
   `;
 
@@ -455,6 +456,71 @@ exports.getPetakUserByNikGeoJSON = async (req, res) => {
 
   } catch (error) {
     console.error("Error getting petak GeoJSON by NIK:", error);
+    res.status(500).json({
+      code: 500,
+      status: "error",
+      data: "Internal Server Error",
+    });
+  }
+};
+
+exports.checkPercilAvailability = async (req, res) => {
+  try {
+    const { idpetak, musim_tanam, tgl_tanam } = req.query;
+
+    if (!idpetak || !musim_tanam || !tgl_tanam) {
+      return res.status(400).json({
+        code: 400,
+        status: "error",
+        data: "Missing required parameters: idpetak, musim_tanam, tgl_tanam",
+      });
+    }
+
+    // Extract year from tgl_tanam
+    const year = new Date(tgl_tanam).getFullYear();
+
+    // Check if this percil is already registered for the same musim_tanam and year (regardless of user)
+    const result = await db.query(
+      `
+      SELECT 
+        id,
+        idpetak,
+        nik,
+        musim_tanam,
+        tgl_tanam,
+        EXTRACT(YEAR FROM tgl_tanam::date) as year
+      FROM petak_user
+      WHERE idpetak = $1 
+        AND musim_tanam = $2 
+        AND EXTRACT(YEAR FROM tgl_tanam::date) = $3
+      `,
+      [idpetak, musim_tanam, year]
+    );
+
+    const isAvailable = result.rows.length === 0;
+    const existingRecord = result.rows[0] || null;
+
+    res.json({
+      code: 200,
+      status: "success",
+      data: {
+        isAvailable,
+        existingRecord: existingRecord ? {
+          id: existingRecord.id,
+          idpetak: existingRecord.idpetak,
+          nik: existingRecord.nik,
+          musim_tanam: existingRecord.musim_tanam,
+          tgl_tanam: existingRecord.tgl_tanam,
+          year: existingRecord.year
+        } : null,
+        message: isAvailable 
+          ? "Percil is available for selection"
+          : `Percil already registered for musim_tanam ${musim_tanam} in year ${year}`
+      }
+    });
+
+  } catch (error) {
+    console.error("Error checking percil availability:", error);
     res.status(500).json({
       code: 500,
       status: "error",
