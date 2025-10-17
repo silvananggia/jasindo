@@ -125,11 +125,26 @@ const MapAnggotaKlaim = () => {
     [dispatch]
   );
 
+  // Helper function to get noPolis value with fallback
+  const getNoPolis = () => {
+    const result = formData.noPolis || anggotalist?.noPolis || '';
+
+    return result;
+  };
+
+  // Helper function to get URL-encoded noPolis value
+  const getEncodedNoPolis = () => {
+    const noPolis = getNoPolis();
+    const encoded = encodeURIComponent(noPolis);
+    
+    return encoded;
+  };
+
   const { mapRef, mapInstance, polygonLayerRef, basemapLayerRef } = useMap(
     isAuthenticated,
     process.env.REACT_APP_GOOGLE_API_KEY,
     handlePercilSelect,
-    petakLayerVisible ? `function_zxy_id_petakuserklaim/{z}/{x}/{y}?id=${formData.nik}&nopolis=${formData.noPolis}` : ""
+    petakLayerVisible ? `function_zxy_id_petakuserklaim/{z}/{x}/{y}?id=${formData.nik}&nopolis=${getEncodedNoPolis()}` : ""
   );
 
   useEffect(() => {
@@ -269,7 +284,12 @@ const MapAnggotaKlaim = () => {
   useEffect(() => {
     if (!polygonLayerRef.current || !mapInstance.current || !formData.nik) return;
 
-    const tileUrlPath = `function_zxy_id_petakuserklaim/{z}/{x}/{y}?id=${formData.nik}&nopolis=${formData.noPolis}`;
+    const tileUrlPath = `function_zxy_id_petakuserklaim/{z}/{x}/{y}?id=${formData.nik}&nopolis=${getEncodedNoPolis()}`;
+    console.log('Debug useEffect tileUrlPath:', {
+      formDataNik: formData.nik,
+      tileUrlPath: tileUrlPath,
+      petakLayerVisible: petakLayerVisible
+    });
     setTileUrl(tileUrlPath);
 
     // Create new source with updated URL
@@ -378,16 +398,48 @@ const MapAnggotaKlaim = () => {
         // Show the petak layer and update the map tile URL to show petak data for the selected NIK
         setPetakLayerVisible(true);
         if (mapInstance.current && polygonLayerRef.current) {
-          const newTileUrl = `function_zxy_id_petakuserklaim/{z}/{x}/{y}?id=${anggota.Nik}&nopolis=${formData.noPolis}`;
+          const newTileUrl = `function_zxy_id_petakuserklaim/{z}/{x}/{y}?id=${anggota.Nik}&nopolis=${getEncodedNoPolis()}`;
+          const fullUrl = `${process.env.REACT_APP_TILE_URL}/${newTileUrl}`;
+          console.log('Debug handleViewPetak:', {
+            anggotaNik: anggota.Nik,
+            newTileUrl: newTileUrl,
+            fullUrl: fullUrl,
+            tileUrlEnv: process.env.REACT_APP_TILE_URL
+          });
           const newSource = new VectorTileSource({
             format: new MVT(),
-            url: `${process.env.REACT_APP_TILE_URL}/${newTileUrl}`,
+            url: fullUrl,
+          });
+          
+          // Add error handling for the source
+          newSource.on('tileloaderror', (event) => {
+            console.error('Debug tile load error:', {
+              url: event.tile.src_,
+              error: event
+            });
+          });
+          
+          newSource.on('tileloadend', (event) => {
+            console.log('Debug tile load end:', {
+              url: event.tile.src_,
+              success: true
+            });
           });
           
           // Set up the layer first
           polygonLayerRef.current.setSource(newSource);
           polygonLayerRef.current.setVisible(true);
           polygonLayerRef.current.changed();
+          
+          console.log('Debug layer state after update:', {
+            layerVisible: polygonLayerRef.current.getVisible(),
+            layerSource: polygonLayerRef.current.getSource(),
+            layerSourceUrl: polygonLayerRef.current.getSource()?.getUrls?.[0],
+            mapLayers: mapInstance.current.getLayers().getArray().map(layer => ({
+              visible: layer.getVisible(),
+              className: layer.constructor.name
+            }))
+          });
           
           // Use the new center petak API for precise zooming
           const performPreciseZoom = async () => {
