@@ -296,16 +296,16 @@ const MapRegister = () => {
     //     return;
     //   }
 
-    //   const luasLahanFloat = parseFloat(luasLahan);
-    //   const upperLimit = luasLahanFloat + (luasLahanFloat * 0.25);
+      const luasLahanFloat = parseFloat(luasLahan);
+      const upperLimit = luasLahanFloat + (luasLahanFloat * 0.25);
 
-    //   if (totalArea > upperLimit) {
-    //     setAlertMessage(`Total area terpilih (${totalArea.toFixed(2)} ha) di luar batas toleransi yang diizinkan (${upperLimit.toFixed(2)} ha)`);
-    //     setAlertOpen(true);
-    //     setIsValid(false);
-    //   } else {
-    //     setIsValid(true);
-    //   }
+      if (totalArea > upperLimit) {
+        setAlertMessage(`Total area terpilih (${totalArea.toFixed(2)} ha) di luar batas toleransi yang diizinkan (${upperLimit.toFixed(2)} ha)`);
+        setAlertOpen(true);
+        setIsValid(false);
+      } else {
+        setIsValid(true);
+      }
     // }
   }, [selectedPercils, totalArea, jmlPetak, luasLahan, listPetak, isDataLoaded, petakLoading]);
 
@@ -415,17 +415,18 @@ const MapRegister = () => {
 
 
 
-    polygonLayerRef.current.setStyle(getPercilStyle(selectedPercils, lockedIDs, isLimitReached));
+    //polygonLayerRef.current.setStyle(getPercilStyle(selectedPercils, lockedIDs, isLimitReached));
+    polygonLayerRef.current.setStyle(getPercilStyle(selectedPercils, lockedIDs));
     polygonLayerRef.current.changed();
 
     // Update cursor style based on limit
     if (mapInstance.current) {
       const mapElement = mapInstance.current.getViewport();
-      if (isLimitReached) {
+/*       if (isLimitReached) {
         mapElement.style.cursor = 'not-allowed';
       } else {
         mapElement.style.cursor = 'pointer';
-      }
+      } */
     }
   }, [selectedPercils, listPetak, jmlPetak, mapInstance]);
 

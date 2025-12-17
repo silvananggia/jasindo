@@ -753,7 +753,7 @@ const DataPanel = ({
                     startIcon={<SaveIcon />}
                     onClick={onSave}
                     sx={{ mt: 2 }}
-                    //disabled={!isValid}
+                    disabled={!isValid}
                     size={isMobile ? "medium" : "large"}
                   >
                     Simpan
