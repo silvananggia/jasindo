@@ -615,7 +615,7 @@ const DataPanel = ({
             <Typography variant="caption" sx={{ color: 'text.secondary', mb: 1, display: 'block' }}>
               Total Luas: {selectedPercils.reduce((sum, p) => sum + parseFloat(p.area || 0), 0).toFixed(2)} ha
             </Typography>
-            
+{/*             
             {((listPetak ? listPetak.length : 0) + selectedPercils.length) >= formData.jmlPetak && (
               <Box mt={1} p={isMobile ? 1 : 1.5} borderRadius={1} sx={{ 
                 backgroundColor: '#fff3cd',
@@ -626,7 +626,7 @@ const DataPanel = ({
                   ⚠️ Limit tercapai! Tidak dapat memilih petak baru lagi. Anda masih dapat menghapus petak yang sudah dipilih.
                 </Typography>
               </Box>
-            )}
+            )} */}
             
             <Typography variant="caption" sx={{ color: 'text.secondary', mb: 1 }}>
               {selectedPercils.length} petak terpilih dari maksimal {availablePetak} yang dapat dipilih
@@ -753,7 +753,7 @@ const DataPanel = ({
                     startIcon={<SaveIcon />}
                     onClick={onSave}
                     sx={{ mt: 2 }}
-                    disabled={!isValid}
+                    //disabled={!isValid}
                     size={isMobile ? "medium" : "large"}
                   >
                     Simpan

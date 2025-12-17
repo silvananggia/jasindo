@@ -178,11 +178,12 @@ const MapRegister = () => {
       const totalSelectedPetak = selectedPercils.length;
       const totalPetak = totalRegisteredPetak + totalSelectedPetak;
      
-      if (totalPetak >= currentJmlPetak) {
-        setAlertMessage(`Tidak dapat menambah petak lagi. Total petak (terdaftar: ${totalRegisteredPetak} + terpilih: ${totalSelectedPetak} = ${totalPetak}) sudah mencapai batas maksimum (${currentJmlPetak})`);
-        setAlertOpen(true);
-        return;
-      }
+      //Cek Jumlah Petak Terdaftar dan Terpilih
+      // if (totalPetak >= currentJmlPetak) {
+      //   setAlertMessage(`Tidak dapat menambah petak lagi. Total petak (terdaftar: ${totalRegisteredPetak} + terpilih: ${totalSelectedPetak} = ${totalPetak}) sudah mencapai batas maksimum (${currentJmlPetak})`);
+      //   setAlertOpen(true);
+      //   return;
+      // }
 
       if (percilData.psid) {
         const idPetak = await dispatch(getPetakID(percilData.psid));
@@ -283,29 +284,29 @@ const MapRegister = () => {
       return;
     }
 
-    if (jmlPetak) {
-      const totalRegisteredPetak = (listPetak || []).length;
-      const totalSelectedPetak = selectedPercils.length;
-      const totalPetak = totalRegisteredPetak + totalSelectedPetak;
+    // if (jmlPetak) {
+    //   const totalRegisteredPetak = (listPetak || []).length;
+    //   const totalSelectedPetak = selectedPercils.length;
+    //   const totalPetak = totalRegisteredPetak + totalSelectedPetak;
 
-      if (totalPetak > jmlPetak) {
-        setAlertMessage(`Total petak (terdaftar: ${totalRegisteredPetak} + terpilih: ${totalSelectedPetak} = ${totalPetak}) tidak dapat lebih dari ${jmlPetak}`);
-        setAlertOpen(true);
-        setIsValid(false);
-        return;
-      }
+    //   if (totalPetak > jmlPetak) {
+    //     setAlertMessage(`Total petak (terdaftar: ${totalRegisteredPetak} + terpilih: ${totalSelectedPetak} = ${totalPetak}) tidak dapat lebih dari ${jmlPetak}`);
+    //     setAlertOpen(true);
+    //     setIsValid(false);
+    //     return;
+    //   }
 
-      const luasLahanFloat = parseFloat(luasLahan);
-      const upperLimit = luasLahanFloat + (luasLahanFloat * 0.25);
+    //   const luasLahanFloat = parseFloat(luasLahan);
+    //   const upperLimit = luasLahanFloat + (luasLahanFloat * 0.25);
 
-      if (totalArea > upperLimit) {
-        setAlertMessage(`Total area terpilih (${totalArea.toFixed(2)} ha) di luar batas toleransi yang diizinkan (${upperLimit.toFixed(2)} ha)`);
-        setAlertOpen(true);
-        setIsValid(false);
-      } else {
-        setIsValid(true);
-      }
-    }
+    //   if (totalArea > upperLimit) {
+    //     setAlertMessage(`Total area terpilih (${totalArea.toFixed(2)} ha) di luar batas toleransi yang diizinkan (${upperLimit.toFixed(2)} ha)`);
+    //     setAlertOpen(true);
+    //     setIsValid(false);
+    //   } else {
+    //     setIsValid(true);
+    //   }
+    // }
   }, [selectedPercils, totalArea, jmlPetak, luasLahan, listPetak, isDataLoaded, petakLoading]);
 
   useEffect(() => {
