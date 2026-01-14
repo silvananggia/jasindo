@@ -249,7 +249,7 @@ const MapRegister = () => {
     process.env.REACT_APP_GOOGLE_API_KEY,
     handlePercilSelect,
 
-    `petak_kecamatan/{z}/{x}/{y}?id=${idkec}`,
+    `petak_kabupaten/{z}/{x}/{y}?id=${idkab}`,
   );
 
   useEffect(() => {
@@ -333,13 +333,29 @@ const MapRegister = () => {
   };
 
   const handleSimpan = async () => {
-    const payload = selectedPercils.map(p => ({
+    // Validasi NIK wajib diisi
+    if (!nik || String(nik).trim() === "") {
+      Swal.fire({
+        icon: "warning",
+        title: "Validasi",
+        text: "NIK wajib diisi.",
+      });
+      return;
+    }
+
+    const payload = selectedPercils.map((p) => ({
       nik: nik,
       idpetak: p.petak_id,
       luas: p.area,
-      musim_tanam: formData.musimTanam || 'MT1', // Default value if not provided
-      tgl_tanam: formData.tanggalTanam || new Date().toISOString().split('T')[0], // Default to today
-      tgl_panen: formData.tanggalPanen || new Date(Date.now() + 90*24*60*60*1000).toISOString().split('T')[0], // Default to 90 days from now
+      musim_tanam: formData.musimTanam || "MT1", // Default value if not provided
+      tgl_tanam:
+        formData.tanggalTanam ||
+        new Date().toISOString().split("T")[0], // Default to today
+      tgl_panen:
+        formData.tanggalPanen ||
+        new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)
+          .toISOString()
+          .split("T")[0], // Default to 90 days from now
       geometry: p.geometry,
     }));
 
@@ -359,10 +375,17 @@ const MapRegister = () => {
       });
     } catch (error) {
       console.error("Error:", error);
+
+      const backendMessage =
+        error?.response?.data?.message ||
+        error?.response?.data?.error ||
+        error.message ||
+        "Gagal Menyimpan Data.";
+
       Swal.fire({
         icon: "error",
         title: "Error",
-        text: "Gagal Menyimpan Data.",
+        text: backendMessage,
       });
     }
   };
@@ -384,7 +407,7 @@ const MapRegister = () => {
   useEffect(() => {
     if (!polygonLayerRef.current || !mapInstance.current || !idkec) return;
 
-    const newTileUrl = `petak_kecamatan/{z}/{x}/{y}?id=${idkec}`;
+    const newTileUrl = `petak_kabupaten/{z}/{x}/{y}?id=${idkab}`;
     setTileUrl(newTileUrl);
 
     // Create new source with updated URL

@@ -8,9 +8,31 @@ const getAllKlaim = () => {
 
 const getKlaimUser = (id, nopolis) => {
   console.log("klaimService - getKlaimUser called with id:", id, "nopolis:", nopolis);
+  
+  // Clean NIK - remove HTML tags if present and extract only the value
+  let cleanId = id;
+  if (typeof id === 'string' && id.includes('<option')) {
+    // If id contains HTML options, try to extract the selected value
+    // This is a fallback in case HTML was passed by mistake
+    const match = id.match(/<option[^>]*selected[^>]*value=['"]([^'"]*)['"]/);
+    if (match && match[1]) {
+      cleanId = match[1];
+    } else {
+      // If no selected option found, try to get the first non-empty option value
+      const firstMatch = id.match(/<option[^>]*value=['"]([^'"]*)['"]/);
+      if (firstMatch && firstMatch[1] && firstMatch[1] !== '0') {
+        cleanId = firstMatch[1];
+      }
+    }
+  }
+  
+  // Strip any remaining HTML tags
+  cleanId = cleanId.replace(/<[^>]*>/g, '').trim();
+  
   const encodedNopolis = encodeURIComponent(nopolis);
   console.log("klaimService - encoded nopolis:", encodedNopolis);
-  const url = `/petak-user-klaim/${id}/${encodedNopolis}`;
+  console.log("klaimService - cleaned id:", cleanId);
+  const url = `/petak-user-klaim/${cleanId}/${encodedNopolis}`;
   console.log("klaimService - API URL:", url);
   return axios.get(url);
 };
