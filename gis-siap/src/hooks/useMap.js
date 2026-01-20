@@ -9,8 +9,10 @@ import TileLayer from 'ol/layer/Tile';
 import XYZ from 'ol/source/XYZ';
 import { toGeometry } from 'ol/render/Feature';
 import GeoJSON from 'ol/format/GeoJSON';
+import Control from 'ol/control/Control';
 import { createBasemapLayer } from '../utils/mapUtils';
 import { getPercilStyle } from '../utils/percilStyles';
+import { getVersionAttribution } from '../config/version';
 
 export const useMap = (isAuthenticated, googleApiKey, onPercilSelect, tileUrl) => {
   const mapRef = useRef(null);
@@ -55,6 +57,36 @@ export const useMap = (isAuthenticated, googleApiKey, onPercilSelect, tileUrl) =
         zoom: 16,
       }),
     });
+
+    // Add version information to map attribution
+    // Wait for map to render, then add version info to attribution
+    setTimeout(() => {
+      const attributionElement = mapRef.current.querySelector('.ol-attribution');
+      if (attributionElement) {
+        // Check if version info already exists to avoid duplicates
+        const existingVersion = attributionElement.querySelector('.version-info');
+        if (!existingVersion) {
+          const versionSpan = document.createElement('span');
+          versionSpan.className = 'version-info';
+          versionSpan.textContent = ` | ${getVersionAttribution()}`;
+          versionSpan.style.marginLeft = '8px';
+          versionSpan.style.fontSize = '11px';
+          versionSpan.style.color = '#666';
+          attributionElement.appendChild(versionSpan);
+        }
+      } else {
+        // Fallback: create custom version control if attribution not found
+        const versionControl = new Control({
+          element: document.createElement('div'),
+        });
+        
+        versionControl.element.className = 'ol-attribution ol-unselectable ol-control';
+        versionControl.element.style.cssText = 'bottom: 0; right: 0; max-width: calc(100% - 1em); font-size: 11px;';
+        versionControl.element.innerHTML = getVersionAttribution();
+        
+        mapInstance.current.addControl(versionControl);
+      }
+    }, 100);
 
     // Add click event handler
     const geojsonFormat = new GeoJSON();
