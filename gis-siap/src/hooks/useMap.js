@@ -10,6 +10,7 @@ import XYZ from 'ol/source/XYZ';
 import { toGeometry } from 'ol/render/Feature';
 import GeoJSON from 'ol/format/GeoJSON';
 import Control from 'ol/control/Control';
+import { getArea as getGeodesicArea } from 'ol/sphere';
 import { createBasemapLayer } from '../utils/mapUtils';
 import { getPercilStyle } from '../utils/percilStyles';
 import { getVersionAttribution } from '../config/version';
@@ -113,17 +114,41 @@ export const useMap = (isAuthenticated, googleApiKey, onPercilSelect, tileUrl) =
 
           geometryGeoJSON = addZDimension(geometryGeoJSON);
 
-          const id = feature.get('psid');
-          const petakid = feature.get('idpetak'); // Fix: use idpetak instead of petak_id
-          const area = feature.get('luas');
-          
           // Extract all feature properties
           const allProperties = feature.getProperties();
+
+          // IDs (tile key can vary)
+          const psid =
+            feature.get('psid') ??
+            allProperties?.psid ??
+            feature.get('id') ??
+            allProperties?.id;
+
+          // Backend expects `petak_id` (your log shows it's present)
+          const petak_id =
+            feature.get('petak_id') ??
+            allProperties?.petak_id ??
+            feature.get('idpetak') ??
+            allProperties?.idpetak ??
+            feature.get('petakid') ??
+            allProperties?.petakid;
+
+          // Area:
+          // Your current `luas` attribute is extremely small (likely not in ha),
+          // so compute geodesic area from geometry (EPSG:4326) and convert m2 -> ha.
+          const areaM2 = getGeodesicArea(geometryClone, { projection: targetProjection });
+          const area = Number.isFinite(areaM2) ? areaM2 / 10000 : 0;
           
           // Create percilData object with all properties
           const percilData = {
-            id,
-            petakid,
+            // keep compatibility with MapRegister:
+            // - it checks `.psid`
+            // - it saves `.petak_id` and reads `.area`
+            psid,
+            id: psid,
+            petak_id,
+            petakid: petak_id,
+            idpetak: petak_id,
             area,
             geometry: geometryGeoJSON,
             ...allProperties // Spread all other properties
