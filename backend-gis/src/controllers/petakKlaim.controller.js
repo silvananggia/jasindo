@@ -264,6 +264,7 @@ exports.getPetakKlaimByNikGeoJSON = async (req, res) => {
 
     const geoJSON = {
       type: "FeatureCollection",
+      total_luas: result.rows.reduce((acc, row) => acc + parseFloat(row.luas), 0),
       features: features
     };
     
