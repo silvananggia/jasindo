@@ -18,7 +18,7 @@ exports.checkAuth = async (req, res, next) => {
   if (!clientCookies) return res.status(401).json({ message: 'No session cookies found' });
 
   try {
-    // console.log("Forwarding cookies:", req.headers.cookie);
+     console.log("Forwarding cookies:", req.headers.cookie);
 
     const response = await axios.get(`${BASE_URL}/auth/check_session`, {
       httpsAgent: httpsAgent,
@@ -30,7 +30,7 @@ exports.checkAuth = async (req, res, next) => {
       }
     });
     
-   // console.log("Response from CI:", response.data);
+    console.log("Response from CI:", response.data);
 
     if (response.data.logged_in) {
       req.user = response.data.user;
@@ -43,4 +43,3 @@ exports.checkAuth = async (req, res, next) => {
     res.status(500).json({ message: 'Session check failed' });
   }
 };
-
