@@ -104,3 +104,13 @@ export const getKlaimID = (id) => async (dispatch) => {
         console.log(err);
     }
 };
+
+export const getListPetakKlaim = (nik,nopolis) => async (dispatch) => {
+    try {
+        const res = await KlaimService.getListPetakKlaim(nik,nopolis);
+        return Promise.resolve(res.data);
+    } catch (err) {
+        console.log(err);
+        return Promise.reject(err);
+    }
+};

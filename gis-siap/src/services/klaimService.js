@@ -41,6 +41,10 @@ const getKlaimID = (id) => {
     return axios.get(`/klaimid/${id}`);
   };
 
+  const getListPetakKlaim = (nik,nopolis) => {
+    return axios.get(`/petak-user-klaim/${nik}/${nopolis}`);
+  };
+
 const createKlaim = (data) => {
   return axios.post("/save-petak-klaim", data);
 };
@@ -60,13 +64,16 @@ const deleteKlaim = (id) => {
   return axios.delete(url, { headers: authHeader() });
 };
 
+
+
 const KlaimService = {
     getAllKlaim,
     getKlaimUser,
     getKlaimID,
     createKlaim,
     updateKlaim,
-    deleteKlaim
+    deleteKlaim,
+    getListPetakKlaim
 };
 
 export default KlaimService;

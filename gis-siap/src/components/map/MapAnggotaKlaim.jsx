@@ -4,41 +4,35 @@ import "./MapAnalytic.css";
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { Autocomplete } from "@react-google-maps/api";
-import { Box, Tabs, Tab, IconButton, Snackbar, Alert, Accordion, AccordionSummary, AccordionDetails, List, ListItem, ListItemText, ListItemAvatar, Avatar, Typography, Divider, Button, Dialog, DialogTitle, DialogContent, DialogActions, Card, CardContent, Grid } from "@mui/material";
+import { Box, Tabs, Tab, IconButton, Snackbar, Alert, List, ListItem, ListItemText, Typography, Button, Card, CardContent, Checkbox, FormControlLabel } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import ListIcon from "@mui/icons-material/List";
 import LayersIcon from "@mui/icons-material/Layers";
 import PeopleIcon from "@mui/icons-material/People";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import AnalyticsIcon from "@mui/icons-material/Analytics";
-import FullscreenIcon from "@mui/icons-material/Fullscreen";
-import FullscreenExitIcon from "@mui/icons-material/FullscreenExit";
 import MenuIcon from "@mui/icons-material/Menu";
+import ZoomInIcon from "@mui/icons-material/ZoomIn";
 import Swal from "sweetalert2";
 import { fromLonLat } from "ol/proj";
 import { VectorTile as VectorTileLayer } from "ol/layer";
 import VectorTileSource from "ol/source/VectorTile";
 import MVT from "ol/format/MVT";
-import { Rnd } from 'react-rnd';
 import { useMap } from "../../hooks/useMap";
 import { useAuthListener } from "../../hooks/useAuthListener";
 import { useURLParams } from "../../hooks/useURLParams";
 import { createBasemapLayer } from "../../utils/mapUtils";
 import { handleSearch } from "../../utils/mapUtils";
 import { getPercilStyle } from "../../utils/percilStyles";
-import { createPetak, getPetakID, getPetakUser, getCenterPetakUser } from "../../actions/petakActions";
+import { createPetak, getPetakID, getPetakUser, getCenterPetakUser, getPetakByIdPetak } from "../../actions/petakActions";
 import { getAnggotaKlaim } from "../../actions/anggotaActions";
-import { getKlaimUser } from "../../actions/klaimActions";
-import BasemapSwitcher from "./BasemapSwitcher";
+import { getKlaimUser, getListPetakKlaim } from "../../actions/klaimActions";
 import GeolocationControl from "./GeolocationControl";
 import Spinner from "../Spinner/Loading-spinner";
-import KlaimPanel from "./KlaimPanel";
 import LayerPanel from "./LayerPanel";
-import Chip from "@mui/material/Chip";
 import { LineChart } from "@mui/x-charts/LineChart";
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import { fitExtent } from "ol/View";
 import { buffer } from "ol/extent";
+import { getTanamPetak, getNDPIAnalisis, getWaterAnalisis, getBareAnalisis } from "../../actions/analisisActions";
 
 const MapAnggotaKlaim = () => {
   const dispatch = useDispatch();
@@ -64,8 +58,7 @@ const MapAnggotaKlaim = () => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const datesContainerRef = useRef(null);
   
-  // New state for petak view functionality
-  const [analyticsPanelOpen, setAnalyticsPanelOpen] = useState(false);
+  // New state for petak view functionality (removed analyticsPanelOpen - now using chartPanelVisible)
   const [selectedAnggota, setSelectedAnggota] = useState(null);
   const [petakLayerVisible, setPetakLayerVisible] = useState(false);
   const [loadingPetakData, setLoadingPetakData] = useState(false);
@@ -76,9 +69,39 @@ const MapAnggotaKlaim = () => {
   // New state for data panel visibility
   const [dataPanelVisible, setDataPanelVisible] = useState(true);
   
-  // Panel state - simplified with react-rnd
-  const [isPanelMaximized, setIsPanelMaximized] = useState(false);
+  // Panel state
   const [isChartMaximized, setIsChartMaximized] = useState(false);
+  const [selectedPetakId, setSelectedPetakId] = useState(null);
+  const [tanamCountLast2Years, setTanamCountLast2Years] = useState(null);
+
+  // Chart series visibility
+  const [showWater, setShowWater] = useState(true);
+  const [showBare, setShowBare] = useState(true);
+  const [showNdpi, setShowNdpi] = useState(true);
+  
+  // Chart panel visibility
+  const [chartPanelVisible, setChartPanelVisible] = useState(false);
+  
+  // Petak list state
+  const [petakList, setPetakList] = useState([]);
+  const [loadingPetakList, setLoadingPetakList] = useState(false);
+
+  // Helper: safely normalize API series data to an array
+  const toArray = (value) => {
+    if (!value) return [];
+    if (Array.isArray(value)) return value;
+    // Try parse JSON string
+    if (typeof value === "string") {
+      try {
+        const parsed = JSON.parse(value);
+        return Array.isArray(parsed) ? parsed : [parsed];
+      } catch (e) {
+        return [value];
+      }
+    }
+    // For objects or primitives, wrap in array
+    return [value];
+  };
 
   const handlePercilSelect = useCallback(
     async (percilData) => {
@@ -114,6 +137,59 @@ const MapAnggotaKlaim = () => {
             return updated;
           }
         });
+
+        // Load analytic chart data for the clicked petak
+        try {
+          const petakId = percilData.petakid;
+          setSelectedPetakId(petakId);
+
+          const [tanamRes, ndpiRes, waterRes, bareRes] = await Promise.all([
+            dispatch(getTanamPetak(petakId)),
+            dispatch(getNDPIAnalisis(petakId)),
+            dispatch(getWaterAnalisis(petakId)),
+            dispatch(getBareAnalisis(petakId)),
+          ]);
+
+          const tanamCount = tanamRes?.data?.tanam_last2th ?? null;
+          const ndpiData = toArray(ndpiRes?.data?.ndpi_val_last2th);
+          const waterData = toArray(waterRes?.data?.water_val_last2th);
+          const bareData = toArray(bareRes?.data?.bare_val_last2th);
+          const satEpoch = toArray(ndpiRes?.data?.sat_epoch ?? null);
+
+          setChartData({
+            dates: satEpoch,
+            // Banjir chart uses Water index
+            floodData: waterData,
+            // Kekeringan chart uses Bare index
+            droughtData: bareData,
+            // Vegetasi chart uses NDPI index
+            rainfallData: ndpiData,
+          });
+
+          // Save tanam count (2 years) for ringkasan lahan
+          setTanamCountLast2Years(tanamCount);
+
+          // Open bottom chart panel when petak is clicked so charts are visible
+          setChartPanelVisible(true);
+          
+          // Set selected anggota if not already set
+          const dataArray = anggotalist?.data || anggotalist?.data?.data || [];
+          if (dataArray && dataArray.length > 0) {
+            const currentAnggota = dataArray[currentAnggotaIndex];
+            const currentNik = currentAnggota?.Nik || currentAnggota?.nik;
+            const selectedNik = selectedAnggota?.Nik || selectedAnggota?.nik;
+            if (currentAnggota && (!selectedAnggota || selectedNik !== currentNik)) {
+              setSelectedAnggota(currentAnggota);
+            }
+          }
+        } catch (apiError) {
+          console.error("Error loading petak analytics:", apiError);
+          Swal.fire({
+            icon: "error",
+            title: "Error",
+            text: "Gagal memuat data analisis petak.",
+          });
+        }
       } catch (err) {
         Swal.fire({
           icon: "error",
@@ -122,7 +198,7 @@ const MapAnggotaKlaim = () => {
         });
       }
     },
-    [dispatch]
+    [dispatch, anggotalist, currentAnggotaIndex, selectedAnggota]
   );
 
   // Helper function to get noPolis value with fallback
@@ -251,28 +327,6 @@ const MapAnggotaKlaim = () => {
     }
   };
 
-  const dates = [
-    "29 Mar'24",
-    "03 Apr'24",
-    "08 Apr'24",
-    "13 Apr'24",
-    "18 Apr'24",
-    "28 Apr'24",
-    "03 May'24",
-    "08 May'24",
-    "13 May'24",
-    "29 Mar'24",
-    "03 Apr'24",
-    "08 Apr'24",
-    "13 Apr'24",
-    "18 Apr'24",
-    "28 Apr'24",
-    "03 May'24",
-    "08 May'24",
-    "13 May'24",
-    "18 May'24",
-  ];
-
   useEffect( () => {
     if (formData && formData.idKelompok && formData.idKlaim) {
       dispatch(getAnggotaKlaim(formData.idKelompok, formData.idKlaim));
@@ -308,6 +362,23 @@ const MapAnggotaKlaim = () => {
     mapInstance,
     polygonLayerRef,
   ]);
+
+  // Update map style when selectedPetakId changes to highlight selected petak using same style as selection
+  useEffect(() => {
+    if (!polygonLayerRef.current || !petakLayerVisible) {
+      // Reset to default style when layer is not visible
+      if (polygonLayerRef.current) {
+        polygonLayerRef.current.setStyle(getPercilStyle([]));
+        polygonLayerRef.current.changed();
+      }
+      return;
+    }
+
+    // Use getPercilStyle with selectedPetakId as selection (same style as when selecting on map)
+    const selection = selectedPetakId ? [{ id: selectedPetakId, petakid: selectedPetakId }] : [];
+    polygonLayerRef.current.setStyle(getPercilStyle(selection));
+    polygonLayerRef.current.changed();
+  }, [selectedPetakId, petakLayerVisible, polygonLayerRef]);
 
   const scrollToDate = (index) => {
     if (datesContainerRef.current) {
@@ -361,7 +432,8 @@ const MapAnggotaKlaim = () => {
       return;
     }
 
-    if (selectedAnggota?.Nik === anggota.Nik && petakLayerVisible) {
+    const nik = anggota.Nik || anggota.nik;
+    if (selectedAnggota && (selectedAnggota.Nik === nik || selectedAnggota.nik === nik) && petakLayerVisible) {
       // If clicking the same anggota and layer is visible, hide it
       setPetakLayerVisible(false);
       setSelectedAnggota(null);
@@ -375,12 +447,12 @@ const MapAnggotaKlaim = () => {
       setLoadingPetakData(true);
       
       try {
-        const result = await dispatch(getPetakUser(anggota.Nik));
+        const result = await dispatch(getPetakUser(nik));
         
         // Check if petak data exists using the result directly, not the state
         if (!result || !result.data || result.data.length === 0) {
           // Mark this anggota as having no petak data
-          setAnggotaPetakStatus(prev => ({ ...prev, [anggota.Nik]: false }));
+          setAnggotaPetakStatus(prev => ({ ...prev, [nik]: false }));
           
           Swal.fire({
             icon: "info",
@@ -393,15 +465,15 @@ const MapAnggotaKlaim = () => {
         }
         
         // Mark this anggota as having petak data
-        setAnggotaPetakStatus(prev => ({ ...prev, [anggota.Nik]: true }));
+        setAnggotaPetakStatus(prev => ({ ...prev, [nik]: true }));
         
         // Show the petak layer and update the map tile URL to show petak data for the selected NIK
         setPetakLayerVisible(true);
         if (mapInstance.current && polygonLayerRef.current) {
-          const newTileUrl = `function_zxy_id_petakuserklaim/{z}/{x}/{y}?id=${anggota.Nik}&nopolis=${getEncodedNoPolis()}`;
+          const newTileUrl = `function_zxy_id_petakuserklaim/{z}/{x}/{y}?id=${nik}&nopolis=${getEncodedNoPolis()}`;
           const fullUrl = `${process.env.REACT_APP_TILE_URL}/${newTileUrl}`;
           console.log('Debug handleViewPetak:', {
-            anggotaNik: anggota.Nik,
+            anggotaNik: nik,
             newTileUrl: newTileUrl,
             fullUrl: fullUrl,
             tileUrlEnv: process.env.REACT_APP_TILE_URL
@@ -444,7 +516,7 @@ const MapAnggotaKlaim = () => {
           // Use the new center petak API for precise zooming
           const performPreciseZoom = async () => {
             try {
-              const centerData = await dispatch(getCenterPetakUser(anggota.Nik));
+              const centerData = await dispatch(getCenterPetakUser(nik));
               
               if (centerData && centerData.data) {
                 const { center, bounds } = centerData.data;
@@ -493,7 +565,7 @@ const MapAnggotaKlaim = () => {
         console.error("Error fetching petak data:", error);
         
         // Mark this anggota as having no petak data due to error
-        setAnggotaPetakStatus(prev => ({ ...prev, [anggota.Nik]: false }));
+        setAnggotaPetakStatus(prev => ({ ...prev, [nik]: false }));
         
         Swal.fire({
           icon: "error",
@@ -507,9 +579,161 @@ const MapAnggotaKlaim = () => {
     }
   };
 
+  // Load petak list for selected anggota
+  const loadPetakList = async (nik) => {
+    if (!nik) return;
+    
+    setLoadingPetakList(true);
+    try {
+      // const result = await dispatch(getPetakUser(nik));
+      const result = await dispatch(getListPetakKlaim(nik,getEncodedNoPolis()));
+      if (result && result.data && result.data.length > 0) {
+        setPetakList(result.data);
+      } else {
+        setPetakList([]);
+      }
+    } catch (error) {
+      console.error("Error loading petak list:", error);
+      setPetakList([]);
+    } finally {
+      setLoadingPetakList(false);
+    }
+  };
+
+  // Zoom to petak function
+  const zoomToPetak = async (petak) => {
+    if (!mapInstance.current) return;
+
+    try {
+      const petakId = petak.idpetak || petak.id;
+      if (!petakId) {
+        console.error("Petak ID not found");
+        return;
+      }
+
+      // Get petak data with geometry from API
+      const petakData = await dispatch(getPetakByIdPetak(petakId));
+      
+      if (petakData && petakData.data) {
+        const data = petakData.data;
+        const view = mapInstance.current.getView();
+
+        // Use bounds if available (more accurate)
+        if (data.bounds) {
+          const { minX, minY, maxX, maxY } = data.bounds;
+          const extent = [
+            fromLonLat([minX, minY])[0],
+            fromLonLat([minX, minY])[1],
+            fromLonLat([maxX, maxY])[0],
+            fromLonLat([maxX, maxY])[1]
+          ];
+
+          const bufferedExtent = buffer(extent, 50);
+          view.fit(bufferedExtent, {
+            duration: 2000,
+            padding: [20, 20, 20, 20],
+            maxZoom: 22
+          });
+          return true;
+        }
+        // Fallback: use center if bounds not available
+        else if (data.center && data.center.coordinates) {
+          const centerCoords = fromLonLat([data.center.coordinates[0], data.center.coordinates[1]]);
+          view.animate({
+            center: centerCoords,
+            zoom: 18,
+            duration: 2000
+          });
+          return true;
+        }
+        // Fallback: use geometry if available
+        else if (data.geometry) {
+          let geometry = data.geometry;
+          if (typeof geometry === 'string') {
+            geometry = JSON.parse(geometry);
+          }
+
+          if (geometry.type === 'Polygon' && geometry.coordinates) {
+            const coords = geometry.coordinates[0];
+            const lons = coords.map(c => c[0]);
+            const lats = coords.map(c => c[1]);
+            
+            const minLon = Math.min(...lons);
+            const maxLon = Math.max(...lons);
+            const minLat = Math.min(...lats);
+            const maxLat = Math.max(...lats);
+
+            const extent = [
+              fromLonLat([minLon, minLat])[0],
+              fromLonLat([minLon, minLat])[1],
+              fromLonLat([maxLon, maxLat])[0],
+              fromLonLat([maxLon, maxLat])[1]
+            ];
+
+            const bufferedExtent = buffer(extent, 50);
+            view.fit(bufferedExtent, {
+              duration: 2000,
+              padding: [20, 20, 20, 20],
+              maxZoom: 22
+            });
+            return true;
+          }
+        }
+      }
+    } catch (geoError) {
+      console.error("Error zooming to petak:", geoError);
+    }
+    return false;
+  };
+
+  // Handle petak click - load analytic data and zoom to petak
+  const handlePetakClick = async (petak) => {
+    try {
+      const petakId = petak.idpetak || petak.id;
+      setSelectedPetakId(petakId);
+
+      // Load analytic chart data for the clicked petak
+      const [tanamRes, ndpiRes, waterRes, bareRes] = await Promise.all([
+        dispatch(getTanamPetak(petakId)),
+        dispatch(getNDPIAnalisis(petakId)),
+        dispatch(getWaterAnalisis(petakId)),
+        dispatch(getBareAnalisis(petakId)),
+      ]);
+
+      const tanamCount = tanamRes?.data?.tanam_last2th ?? null;
+      const ndpiData = toArray(ndpiRes?.data?.ndpi_val_last2th);
+      const waterData = toArray(waterRes?.data?.water_val_last2th);
+      const bareData = toArray(bareRes?.data?.bare_val_last2th);
+      const satEpoch = toArray(ndpiRes?.data?.sat_epoch ?? null);
+
+      setChartData({
+        dates: satEpoch,
+        floodData: waterData,
+        droughtData: bareData,
+        rainfallData: ndpiData,
+      });
+
+      setTanamCountLast2Years(tanamCount);
+
+      // Zoom to petak
+      await zoomToPetak(petak);
+
+      // Ensure chart panel is visible
+      setChartPanelVisible(true);
+    } catch (apiError) {
+      console.error("Error loading petak analytics:", apiError);
+      Swal.fire({
+        icon: "error",
+        title: "Error",
+        text: "Gagal memuat data analisis petak.",
+      });
+    }
+  };
+
   const handleViewAnalytics = (anggota) => {
+    const nik = anggota.Nik || anggota.nik;
     // Check if petak data is available before opening analytics
-    if (anggotaPetakStatus[anggota.Nik] === false) {
+    if (anggotaPetakStatus[nik] === false) {
       Swal.fire({
         icon: "info",
         title: "Analytics Tidak Tersedia",
@@ -519,69 +743,32 @@ const MapAnggotaKlaim = () => {
       return;
     }
 
-    if (selectedAnggota?.Nik === anggota.Nik && analyticsPanelOpen) {
+    // Set selected anggota and toggle bottom chart panel
+    setSelectedAnggota(anggota);
+    
+    if (selectedAnggota && (selectedAnggota.Nik === nik || selectedAnggota.nik === nik) && chartPanelVisible) {
       // If clicking the same anggota and panel is open, close it
-      setAnalyticsPanelOpen(false);
-      setSelectedAnggota(null);
+      setChartPanelVisible(false);
     } else {
-      // Open panel for new anggota or if panel is closed
-      setSelectedAnggota(anggota);
-      setAnalyticsPanelOpen(true);
+      // Open bottom panel for new anggota or if panel is closed
+      setChartPanelVisible(true);
+      // Load petak list when opening analytics
+      loadPetakList(nik);
     }
   };
 
-  const handleCloseAnalyticsPanel = () => {
-    setAnalyticsPanelOpen(false);
-    setSelectedAnggota(null);
-  };
-
-  // Panel handlers - simplified with react-rnd
-  const handleMaximizePanel = () => {
-    if (!isPanelMaximized) {
-      // Store current position and size before maximizing
-      setPanelState({
-        x: window.innerWidth - 300, // Position on the right side
-        y: 15,
-        width: 280,
-        height: window.innerHeight * 0.75,
-      });
-      // Maximize to fullscreen
-      setPanelState({
-        x: 0,
-        y: 0,
-        width: window.innerWidth,
-        height: window.innerHeight,
-      });
-    } else {
-      // Restore to previous position and size
-      setPanelState({
-        x: window.innerWidth - 300, // Position on the right side
-        y: 15,
-        width: 280,
-        height: window.innerHeight * 0.75,
-      });
-    }
-    setIsPanelMaximized(!isPanelMaximized);
-  };
-
+  // Panel handlers
   const handleMaximizeChart = () => {
     setIsChartMaximized(!isChartMaximized);
   };
 
   // State to track which anggotas have petak data
   const [anggotaPetakStatus, setAnggotaPetakStatus] = useState({});
-  
-  // Panel state - simplified with react-rnd
-  const [panelState, setPanelState] = useState({
-    x: window.innerWidth - 300, // Position on the right side
-    y: 15,
-    width: 280,
-    height: window.innerHeight * 0.75,
-  });
 
   // Helper function to check if petak data exists for an anggota
   const hasPetakData = (anggota) => {
-    const status = anggotaPetakStatus[anggota.Nik];
+    const nik = anggota.Nik || anggota.nik;
+    const status = anggotaPetakStatus[nik];
     // If status is undefined, we haven't checked yet, so allow the button to be enabled
     // If status is false, we know there's no data, so disable the button
     // If status is true, we know there's data, so enable the button
@@ -589,37 +776,7 @@ const MapAnggotaKlaim = () => {
   };
 
 
-  // Handle window resize when maximized
-  useEffect(() => {
-    const handleResize = () => {
-      if (isPanelMaximized) {
-        setPanelState({
-          x: 0,
-          y: 0,
-          width: window.innerWidth,
-          height: window.innerHeight,
-        });
-      }
-    };
 
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [isPanelMaximized]);
-
-  // Handle window resize to keep panel on right side
-  useEffect(() => {
-    const handleResize = () => {
-      if (!isPanelMaximized && analyticsPanelOpen) {
-        setPanelState(prev => ({
-          ...prev,
-          x: window.innerWidth - 300, // Keep panel on the right side
-        }));
-      }
-    };
-
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [isPanelMaximized, analyticsPanelOpen]);
 
   // Handle scroll detection to show/hide scrollbar
   useEffect(() => {
@@ -653,17 +810,19 @@ const MapAnggotaKlaim = () => {
 
   // Pre-check petak data availability for all anggotas
   useEffect(() => {
-    if (anggotalist && anggotalist.data && anggotalist.data.length > 0) {
+    const dataArray = anggotalist?.data || anggotalist?.data?.data || [];
+    if (dataArray && dataArray.length > 0) {
       // Initialize all anggotas as potentially having petak data
       const initialStatus = {};
-      anggotalist.data.forEach(anggota => {
-        initialStatus[anggota.Nik] = undefined; // undefined means not checked yet
+      dataArray.forEach(anggota => {
+        const nik = anggota.Nik || anggota.nik;
+        initialStatus[nik] = undefined; // undefined means not checked yet
       });
       setAnggotaPetakStatus(initialStatus);
       
       // Set the first anggota as selected by default to show analytics panel
       if (!selectedAnggota) {
-        const firstAnggota = anggotalist.data[0];
+        const firstAnggota = dataArray[0];
         setSelectedAnggota(firstAnggota);
         setCurrentAnggotaIndex(0);
       }
@@ -672,13 +831,20 @@ const MapAnggotaKlaim = () => {
 
   // Update selectedAnggota when currentAnggotaIndex changes
   useEffect(() => {
-    if (anggotalist && anggotalist.data && anggotalist.data.length > 0) {
-      const currentAnggota = anggotalist.data[currentAnggotaIndex];
-      if (currentAnggota && (!selectedAnggota || selectedAnggota.Nik !== currentAnggota.Nik)) {
+    const dataArray = anggotalist?.data || anggotalist?.data?.data || [];
+    if (dataArray && dataArray.length > 0) {
+      const currentAnggota = dataArray[currentAnggotaIndex];
+      const currentNik = currentAnggota?.Nik || currentAnggota?.nik;
+      const selectedNik = selectedAnggota?.Nik || selectedAnggota?.nik;
+      if (currentAnggota && (!selectedAnggota || selectedNik !== currentNik)) {
         setSelectedAnggota(currentAnggota);
+        // Load petak list when anggota changes and analytics panel is open
+        if (chartPanelVisible && currentNik) {
+          loadPetakList(currentNik);
+        }
       }
     }
-  }, [currentAnggotaIndex, anggotalist, selectedAnggota]);
+  }, [currentAnggotaIndex, anggotalist, selectedAnggota, chartPanelVisible]);
 
   // Keyboard navigation support
   useEffect(() => {
@@ -700,28 +866,30 @@ const MapAnggotaKlaim = () => {
 
   // Navigation functions for anggota
   const handlePrevAnggota = () => {
-    if (anggotalist && anggotalist.data && anggotalist.data.length > 0) {
+    const dataArray = anggotalist?.data || anggotalist?.data?.data || [];
+    if (dataArray && dataArray.length > 0) {
       const newIndex = Math.max(0, currentAnggotaIndex - 1);
       setCurrentAnggotaIndex(newIndex);
-      const newAnggota = anggotalist.data[newIndex];
+      const newAnggota = dataArray[newIndex];
       setSelectedAnggota(newAnggota);
       
       // Reset panels when changing anggota
       setPetakLayerVisible(false);
-      setAnalyticsPanelOpen(false);
+      setChartPanelVisible(false);
     }
   };
 
   const handleNextAnggota = () => {
-    if (anggotalist && anggotalist.data && anggotalist.data.length > 0) {
-      const newIndex = Math.min(anggotalist.data.length - 1, currentAnggotaIndex + 1);
+    const dataArray = anggotalist?.data || anggotalist?.data?.data || [];
+    if (dataArray && dataArray.length > 0) {
+      const newIndex = Math.min(dataArray.length - 1, currentAnggotaIndex + 1);
       setCurrentAnggotaIndex(newIndex);
-      const newAnggota = anggotalist.data[newIndex];
+      const newAnggota = dataArray[newIndex];
       setSelectedAnggota(newAnggota);
       
       // Reset panels when changing anggota
       setPetakLayerVisible(false);
-      setAnalyticsPanelOpen(false);
+      setChartPanelVisible(false);
     }
   };
 
@@ -740,7 +908,7 @@ const MapAnggotaKlaim = () => {
     return dates;
   };
 
-  // Generate sample data for the charts (you can replace this with real API data)
+  // Generate sample data for the charts (used as initial placeholder before API data loads)
   const generateChartData = () => {
     const dates = generateLastTwoMonthsData();
     const floodData = dates.map(() => Math.random() * 10 + 1); // Random flood data
@@ -748,9 +916,9 @@ const MapAnggotaKlaim = () => {
     const rainfallData = dates.map(() => Math.random() * 200 + 50); // Random rainfall data (mm)
     
     return {
-      dates: dates.map(date => date.toLocaleDateString('id-ID', { 
-        day: '2-digit', 
-        month: 'short' 
+      dates: dates.map(date => date.toLocaleDateString('id-ID', {
+        day: '2-digit',
+        month: 'short'
       })),
       floodData,
       droughtData,
@@ -758,7 +926,8 @@ const MapAnggotaKlaim = () => {
     };
   };
 
-  const chartData = generateChartData();
+  const [chartData, setChartData] = useState(() => generateChartData());
+  const dates = chartData.dates || [];
 
   if (loading) {
     return <Spinner className="content-loader" />;
@@ -910,36 +1079,51 @@ const MapAnggotaKlaim = () => {
             top: "15px",
             left: "30px",
             width: "100%",
-            maxWidth: "280px",
-            background: "rgba(255, 255, 255, 0.95)",
+            maxWidth: "300px",
+            background: "rgba(255, 255, 255, 0.98)",
             borderRadius: "12px",
             padding: "0",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+            boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
             zIndex: 1000,
-            maxHeight: "85vh",
+            maxHeight: chartPanelVisible ? (isChartMaximized ? `calc(50vh - 20px)` : `calc(100vh - 340px)`) : "85vh",
             overflow: "hidden",
             display: "flex",
             flexDirection: "column",
+            border: "1px solid rgba(0,0,0,0.08)",
           }}
         >
           {/* Fixed Tab Header */}
-          <Box sx={{ 
-            position: "sticky", 
-            top: 0, 
+          <Box sx={{
+            position: "sticky",
+            top: 0,
             zIndex: 10,
-            backgroundColor: "rgba(255, 255, 255, 0.95)",
+            backgroundColor: "#ffffff",
             borderRadius: "12px 12px 0 0",
-            borderBottom: "1px solid rgba(0,0,0,0.1)",
+            borderBottom: "2px solid rgba(0,0,0,0.08)",
             backdropFilter: "blur(10px)",
             display: "flex",
             justifyContent: "space-between",
-            alignItems: "center"
+            alignItems: "center",
+            padding: "4px 0"
           }}>
-            <Tabs value={tabValue} onChange={handleTabChange} sx={{ minHeight: '40px' }}>
-              <Tab label="Anggota" icon={<PeopleIcon />} iconPosition="start" sx={{ fontSize: '0.8rem', minHeight: '40px' }} />
-              <Tab label="Layers" icon={<LayersIcon />} iconPosition="start" sx={{ fontSize: '0.8rem', minHeight: '40px' }} />
+            <Tabs 
+              value={tabValue} 
+              onChange={handleTabChange} 
+              sx={{ 
+                minHeight: '44px',
+                '& .MuiTab-root': {
+                  minHeight: '44px',
+                  fontSize: '0.8rem',
+                  fontWeight: 500,
+                  textTransform: 'none',
+                  padding: '8px 16px'
+                }
+              }}
+            >
+              <Tab label="Anggota" icon={<PeopleIcon sx={{ fontSize: '18px' }} />} iconPosition="start" />
+              <Tab label="Layers" icon={<LayersIcon sx={{ fontSize: '18px' }} />} iconPosition="start" />
             </Tabs>
-            
+
             {/* Hide Button on Panel */}
             <IconButton
               size="small"
@@ -961,231 +1145,166 @@ const MapAnggotaKlaim = () => {
           </Box>
 
           {/* Scrollable Content Area */}
-          <Box sx={{ 
-            flex: 1, 
-            overflowY: "auto", 
-            padding: "8px",
-            paddingTop: "8px"
+          <Box sx={{
+            flex: 1,
+            overflowY: "auto",
+            padding: "10px",
+            '&::-webkit-scrollbar': {
+              width: '6px',
+            },
+            '&::-webkit-scrollbar-track': {
+              background: 'transparent',
+            },
+            '&::-webkit-scrollbar-thumb': {
+              background: 'rgba(0,0,0,0.2)',
+              borderRadius: '3px',
+            },
+            '&::-webkit-scrollbar-thumb:hover': {
+              background: 'rgba(0,0,0,0.3)',
+            },
           }}>
             {tabValue === 0 && (
-              <div style={{ padding: '8px 0' }}>
-                <Typography variant="subtitle1" gutterBottom sx={{ fontSize: '0.9rem', mb: 1 }}>
-                  Daftar Anggota Kelompok
-                </Typography>
-                
-                {anggotaLoading ? (
-                  <div style={{ textAlign: 'center', padding: '15px' }}>
-                    <Typography sx={{ fontSize: '0.8rem' }}>Loading anggota...</Typography>
-                  </div>
-                ) : anggotalist && anggotalist.data && anggotalist.data.length > 0 ? (
-                  <div>
-                    {/* Navigation Controls */}
-                    <Box sx={{ 
-                      display: 'flex', 
-                      justifyContent: 'space-between', 
-                      alignItems: 'center', 
-                      mb: 1.5,
-                      p: 1.5,
-                      backgroundColor: 'rgba(25, 118, 210, 0.08)',
-                      borderRadius: '8px',
-                      border: '1px solid rgba(25, 118, 210, 0.2)'
-                    }}>
-                      <Button
-                        variant="outlined"
-                        size="small"
-                        onClick={handlePrevAnggota}
-                        disabled={currentAnggotaIndex === 0}
-                        startIcon={<span style={{ fontSize: '14px' }}>‹</span>}
-                        sx={{
-                          minWidth: '60px',
-                          fontSize: '0.7rem',
-                          padding: '4px 8px',
-                          '&:hover': {
-                            backgroundColor: 'rgba(25, 118, 210, 0.1)',
-                            transform: 'translateX(-1px)',
-                            transition: 'all 0.2s ease'
-                          },
-                          transition: 'all 0.2s ease'
-                        }}
-                      >
-                        Prev
-                      </Button>
-                      
-                      <Box sx={{ textAlign: 'center' }}>
-                        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 'bold', fontSize: '0.7rem' }}>
-                          {currentAnggotaIndex + 1} dari {anggotalist.data.length}
-                        </Typography>
-                      </Box>
-                      
-                      <Button
-                        variant="outlined"
-                        size="small"
-                        onClick={handleNextAnggota}
-                        disabled={currentAnggotaIndex === anggotalist.data.length - 1}
-                        endIcon={<span style={{ fontSize: '14px' }}>›</span>}
-                        sx={{
-                          minWidth: '60px',
-                          fontSize: '0.7rem',
-                          padding: '4px 8px',
-                          '&:hover': {
-                            backgroundColor: 'rgba(25, 118, 210, 0.1)',
-                            transform: 'translateX(1px)',
-                            transition: 'all 0.2s ease'
-                          },
-                          transition: 'all 0.2s ease'
-                        }}
-                      >
-                        Next
-                      </Button>
-                    </Box>
+              <Box sx={{ padding: '0' }}>
 
-                    {/* Current Anggota Display */}
-                    <Typography variant="caption" style={{ padding: '8px 12px', fontWeight: 'bold', mb: 1.5, fontSize: '0.75rem' }}>
-                      ID Polis: {anggotalist.noPolis}
-                    </Typography>
-                    
-                    {(() => {
-                      const currentAnggota = anggotalist.data[currentAnggotaIndex];
-                      return (
-                        <Card 
-                          key={`anggota-${currentAnggotaIndex}`}
-                          sx={{ 
-                            mb: 1.5, 
-                            border: '1px solid #e0e0e0',
-                            transition: 'all 0.3s ease',
-                            '&:hover': {
-                              boxShadow: '0 2px 12px rgba(0,0,0,0.1)',
-                              transform: 'translateY(-1px)'
-                            }
-                          }}
-                        >
-                          <CardContent sx={{ padding: '12px' }}>
-                            <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
-                              
-                              <Box sx={{ flex: 1 }}>
-                                <Typography variant="subtitle2" component="div" gutterBottom sx={{ fontSize: '0.85rem', mb: 1 }}>
-                                  {currentAnggota.Nama || 'Nama tidak tersedia'}
-                                </Typography>
-                                
-                                <Typography component="div" variant="caption" color="text.primary" sx={{ mb: 0.5, fontSize: '0.7rem' }}>
-                                  <strong>NIK:</strong> {currentAnggota.Nik || 'Tidak tersedia'}
-                                </Typography>
-                                
-                                <Typography component="div" variant="caption" color="text.secondary" sx={{ mb: 0.5, fontSize: '0.7rem' }}>
-                                  <strong>Luas Lahan:</strong> {currentAnggota["Luas lahan"] || '0'} ha
-                                </Typography>
-                                
-                                <Typography component="div" variant="caption" color="text.secondary" sx={{ mb: 0.5, fontSize: '0.7rem' }}>
-                                  <strong>Jumlah Petak:</strong> {currentAnggota.JumlahPetakAlami || '0'}
-                                </Typography>
-                                
-                                <Typography component="div" variant="caption" color="text.secondary" sx={{ mb: 0.5, fontSize: '0.7rem' }}>
-                                  <strong>Jenis Lahan:</strong> {currentAnggota.JenisLahan || 'Tidak tersedia'}
-                                </Typography>
-                                
-                                {currentAnggota["Desa Petani"] && (
-                                  <Typography component="div" variant="caption" color="text.secondary" sx={{ mb: 1.5, fontSize: '0.7rem' }}>
-                                    <strong>Desa:</strong> {currentAnggota["Desa Petani"]}
+
+                {anggotaLoading ? (
+                  <Box sx={{ textAlign: 'center', padding: '20px' }}>
+                    <Typography sx={{ fontSize: '0.8rem', color: 'text.secondary' }}>Loading anggota...</Typography>
+                  </Box>
+                ) : (() => {
+                  const dataArray = anggotalist?.data || anggotalist?.data?.data || [];
+                  return dataArray && dataArray.length > 0 ? (
+                    <Box>
+                      {/* Current Anggota Display */}
+                      {(() => {
+                        const currentAnggota = dataArray[currentAnggotaIndex];
+                        return (
+                          <Card
+                            key={`anggota-${currentAnggotaIndex}`}
+                            sx={{
+                              border: '1px solid rgba(0,0,0,0.08)',
+                              borderRadius: '8px',
+                              transition: 'all 0.2s ease',
+                              boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+                              overflow: 'hidden',
+                              '&:hover': {
+                                boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
+                                borderColor: '#1976d2'
+                              }
+                            }}
+                          >
+                            <CardContent sx={{ padding: '12px', '&:last-child': { paddingBottom: '12px' } }}>
+                              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                                <Box>
+                                  <Typography variant="subtitle2" component="div" sx={{ fontSize: '0.85rem', fontWeight: 600, mb: 0.5, color: '#212529' }}>
+                                    {currentAnggota.Nama || currentAnggota.nama || 'Nama tidak tersedia'}
                                   </Typography>
-                                )}
-                                
+                                  <Typography component="div" variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', display: 'block' }}>
+                                    NIK: {currentAnggota.Nik || currentAnggota.nik || 'Tidak tersedia'}
+                                  </Typography>
+                                </Box>
+
+
                                 {/* Action Buttons */}
-                                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, mt: 1.5 }}>
+                                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75, mt: 0.5 }}>
                                   <Button
                                     size="small"
-                                    variant={selectedAnggota?.Nik === currentAnggota.Nik && petakLayerVisible ? "contained" : "outlined"}
-                                    startIcon={<VisibilityIcon sx={{ fontSize: '16px' }} />}
+                                    variant={(selectedAnggota?.Nik === currentAnggota.Nik || selectedAnggota?.nik === currentAnggota.nik) && petakLayerVisible ? "contained" : "outlined"}
+                                    startIcon={<VisibilityIcon sx={{ fontSize: '14px' }} />}
                                     onClick={() => handleViewPetak(currentAnggota)}
                                     disabled={!hasPetakData(currentAnggota) || loadingPetakData}
-                                    sx={{ 
-                                      minWidth: 'auto', 
-                                      fontSize: '0.65rem',
-                                      padding: '4px 8px',
-                                      opacity: anggotaPetakStatus[currentAnggota.Nik] === false ? 0.5 : 1,
-                                      backgroundColor: selectedAnggota?.Nik === currentAnggota.Nik && petakLayerVisible 
-                                        ? '#1976d2' 
-                                        : anggotaPetakStatus[currentAnggota.Nik] === false 
-                                          ? '#f5f5f5' 
-                                          : 'inherit',
-                                      color: selectedAnggota?.Nik === currentAnggota.Nik && petakLayerVisible 
-                                        ? 'white' 
-                                        : 'inherit',
-                                      borderColor: selectedAnggota?.Nik === currentAnggota.Nik && petakLayerVisible 
-                                        ? '#1976d2' 
+                                    sx={{
+                                      minWidth: 'auto',
+                                      fontSize: '0.7rem',
+                                      padding: '6px 12px',
+                                      height: '32px',
+                                      opacity: anggotaPetakStatus[currentAnggota.Nik || currentAnggota.nik] === false ? 0.5 : 1,
+                                      backgroundColor: (selectedAnggota?.Nik === currentAnggota.Nik || selectedAnggota?.nik === currentAnggota.nik) && petakLayerVisible
+                                        ? '#1976d2'
+                                        : 'transparent',
+                                      color: (selectedAnggota?.Nik === currentAnggota.Nik || selectedAnggota?.nik === currentAnggota.nik) && petakLayerVisible
+                                        ? 'white'
                                         : '#1976d2',
+                                      borderColor: '#1976d2',
                                       '&:hover': {
-                                        backgroundColor: selectedAnggota?.Nik === currentAnggota.Nik && petakLayerVisible 
-                                          ? '#1565c0' 
-                                          : 'rgba(25, 118, 210, 0.1)',
+                                        backgroundColor: (selectedAnggota?.Nik === currentAnggota.Nik || selectedAnggota?.nik === currentAnggota.nik) && petakLayerVisible
+                                          ? '#1565c0'
+                                          : 'rgba(25, 118, 210, 0.08)',
                                         borderColor: '#1976d2'
+                                      },
+                                      '&:disabled': {
+                                        borderColor: '#e0e0e0',
+                                        color: '#9e9e9e'
                                       }
                                     }}
-                                    title={anggotaPetakStatus[currentAnggota.Nik] === false ? "Data panel belum tersedia" : loadingPetakData ? "Loading..." : "View Petak"}
+                                    title={anggotaPetakStatus[currentAnggota.Nik || currentAnggota.nik] === false ? "Data panel belum tersedia" : loadingPetakData ? "Loading..." : "View Petak"}
                                   >
-                                    {loadingPetakData && selectedAnggota?.Nik === currentAnggota.Nik 
-                                      ? 'Loading...' 
-                                      : selectedAnggota?.Nik === currentAnggota.Nik && petakLayerVisible 
-                                        ? 'Hide Petak' 
+                                    {loadingPetakData && (selectedAnggota?.Nik === currentAnggota.Nik || selectedAnggota?.nik === currentAnggota.nik)
+                                      ? 'Loading...'
+                                      : (selectedAnggota?.Nik === currentAnggota.Nik || selectedAnggota?.nik === currentAnggota.nik) && petakLayerVisible
+                                        ? 'Hide Petak'
                                         : 'View Petak'}
                                   </Button>
-                                  
-                                  {anggotaPetakStatus[currentAnggota.Nik] === false && (
-                                    <Typography 
-                                      variant="caption" 
-                                      color="text.secondary" 
-                                      sx={{ 
-                                        fontSize: '0.6rem', 
+
+                                  {anggotaPetakStatus[currentAnggota.Nik || currentAnggota.nik] === false && (
+                                    <Typography
+                                      variant="caption"
+                                      color="text.secondary"
+                                      sx={{
+                                        fontSize: '0.65rem',
                                         textAlign: 'center',
-                                        fontStyle: 'italic'
+                                        fontStyle: 'italic',
+                                        padding: '4px 0'
                                       }}
                                     >
                                       Data petak belum tersedia
                                     </Typography>
                                   )}
-                                  
+
                                   <Button
                                     size="small"
-                                    variant={selectedAnggota?.Nik === currentAnggota.Nik && analyticsPanelOpen ? "contained" : "outlined"}
-                                    startIcon={<AnalyticsIcon sx={{ fontSize: '16px' }} />}
+                                    variant={(selectedAnggota?.Nik === currentAnggota.Nik || selectedAnggota?.nik === currentAnggota.nik) && chartPanelVisible ? "contained" : "outlined"}
+                                    startIcon={<AnalyticsIcon sx={{ fontSize: '14px' }} />}
                                     onClick={() => handleViewAnalytics(currentAnggota)}
-                                    disabled={anggotaPetakStatus[currentAnggota.Nik] === false}
-                                    sx={{ 
-                                      minWidth: 'auto', 
-                                      fontSize: '0.65rem',
-                                      padding: '4px 8px',
-                                      opacity: anggotaPetakStatus[currentAnggota.Nik] === false ? 0.5 : 1,
-                                      backgroundColor: selectedAnggota?.Nik === currentAnggota.Nik && analyticsPanelOpen 
-                                        ? '#4caf50' 
-                                        : anggotaPetakStatus[currentAnggota.Nik] === false 
-                                          ? '#f5f5f5' 
-                                          : 'inherit',
-                                      color: selectedAnggota?.Nik === currentAnggota.Nik && analyticsPanelOpen 
-                                        ? 'white' 
-                                        : 'inherit',
-                                      borderColor: selectedAnggota?.Nik === currentAnggota.Nik && analyticsPanelOpen 
-                                        ? '#4caf50' 
+                                    disabled={anggotaPetakStatus[currentAnggota.Nik || currentAnggota.nik] === false}
+                                    sx={{
+                                      minWidth: 'auto',
+                                      fontSize: '0.7rem',
+                                      padding: '6px 12px',
+                                      height: '32px',
+                                      opacity: anggotaPetakStatus[currentAnggota.Nik || currentAnggota.nik] === false ? 0.5 : 1,
+                                      backgroundColor: (selectedAnggota?.Nik === currentAnggota.Nik || selectedAnggota?.nik === currentAnggota.nik) && chartPanelVisible
+                                        ? '#4caf50'
+                                        : 'transparent',
+                                      color: (selectedAnggota?.Nik === currentAnggota.Nik || selectedAnggota?.nik === currentAnggota.nik) && chartPanelVisible
+                                        ? 'white'
                                         : '#4caf50',
+                                      borderColor: '#4caf50',
                                       '&:hover': {
-                                        backgroundColor: selectedAnggota?.Nik === currentAnggota.Nik && analyticsPanelOpen 
-                                          ? '#388e3c' 
-                                          : 'rgba(76, 175, 80, 0.1)',
+                                        backgroundColor: (selectedAnggota?.Nik === currentAnggota.Nik || selectedAnggota?.nik === currentAnggota.nik) && chartPanelVisible
+                                          ? '#388e3c'
+                                          : 'rgba(76, 175, 80, 0.08)',
                                         borderColor: '#4caf50'
+                                      },
+                                      '&:disabled': {
+                                        borderColor: '#e0e0e0',
+                                        color: '#9e9e9e'
                                       }
                                     }}
-                                    title={anggotaPetakStatus[currentAnggota.Nik] === false ? "Data petak belum tersedia" : "View Analytics"}
+                                    title={anggotaPetakStatus[currentAnggota.Nik || currentAnggota.nik] === false ? "Data petak belum tersedia" : "View Analytics"}
                                   >
-                                    {selectedAnggota?.Nik === currentAnggota.Nik && analyticsPanelOpen ? 'Analytics On' : 'Analytics'}
+                                    {(selectedAnggota?.Nik === currentAnggota.Nik || selectedAnggota?.nik === currentAnggota.nik) && chartPanelVisible ? 'Analytics On' : 'Analytics'}
                                   </Button>
-                                  
-                                  {anggotaPetakStatus[currentAnggota.Nik] === false && (
-                                    <Typography 
-                                      variant="caption" 
-                                      color="text.secondary" 
-                                      sx={{ 
-                                        fontSize: '0.6rem', 
+
+                                  {anggotaPetakStatus[currentAnggota.Nik || currentAnggota.nik] === false && (
+                                    <Typography
+                                      variant="caption"
+                                      color="text.secondary"
+                                      sx={{
+                                        fontSize: '0.65rem',
                                         textAlign: 'center',
                                         fontStyle: 'italic',
-                                        marginTop: '2px'
+                                        padding: '4px 0'
                                       }}
                                     >
                                       Analytics tidak tersedia - data petak diperlukan
@@ -1193,20 +1312,81 @@ const MapAnggotaKlaim = () => {
                                   )}
                                 </Box>
                               </Box>
+                            </CardContent>
+                            
+                            {/* Navigation Controls at bottom of card */}
+                            <Box sx={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              padding: '8px 12px',
+                              backgroundColor: 'rgba(25, 118, 210, 0.06)',
+                              borderRadius: '0 0 8px 8px',
+                              borderTop: '1px solid rgba(25, 118, 210, 0.15)'
+                            }}>
+                              <Button
+                                variant="text"
+                                size="small"
+                                onClick={handlePrevAnggota}
+                                disabled={currentAnggotaIndex === 0}
+                                startIcon={<span style={{ fontSize: '14px' }}>‹</span>}
+                                sx={{
+                                  minWidth: 'auto',
+                                  fontSize: '0.7rem',
+                                  padding: '4px 8px',
+                                  height: '28px',
+                                  color: '#1976d2',
+                                  '&:hover': {
+                                    backgroundColor: 'rgba(25, 118, 210, 0.08)',
+                                  },
+                                  '&:disabled': {
+                                    color: '#9e9e9e'
+                                  }
+                                }}
+                              >
+                                Prev
+                              </Button>
+
+                              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500, fontSize: '0.7rem' }}>
+                                {currentAnggotaIndex + 1} dari {dataArray.length}
+                              </Typography>
+
+                              <Button
+                                variant="text"
+                                size="small"
+                                onClick={handleNextAnggota}
+                                disabled={currentAnggotaIndex === dataArray.length - 1}
+                                endIcon={<span style={{ fontSize: '14px' }}>›</span>}
+                                sx={{
+                                  minWidth: 'auto',
+                                  fontSize: '0.7rem',
+                                  padding: '4px 8px',
+                                  height: '28px',
+                                  color: '#1976d2',
+                                  '&:hover': {
+                                    backgroundColor: 'rgba(25, 118, 210, 0.08)',
+                                  },
+                                  '&:disabled': {
+                                    color: '#9e9e9e'
+                                  }
+                                }}
+                              >
+                                Next
+                              </Button>
                             </Box>
-                          </CardContent>
-                        </Card>
-                      );
-                    })()}
-                  </div>
-                ) : (
-                  <div style={{ textAlign: 'center', padding: '15px' }}>
-                    <Typography color="text.secondary" sx={{ fontSize: '0.8rem' }}>
-                      Tidak ada data anggota untuk kelompok ini
-                    </Typography>
-                  </div>
-                )}
-              </div>
+                          </Card>
+                        );
+                      })()}
+                    </Box>
+                  ) : (
+                    <Box sx={{ textAlign: 'center', padding: '20px' }}>
+                      <Typography color="text.secondary" sx={{ fontSize: '0.8rem' }}>
+                        Tidak ada data anggota untuk kelompok ini
+                      </Typography>
+                    </Box>
+                  );
+                })()}
+              </Box>
             )}
 
             {tabValue === 1 && (
@@ -1234,304 +1414,451 @@ const MapAnggotaKlaim = () => {
         </div>
       )}
 
-      {/* Analytics Panel */}
-      {analyticsPanelOpen && selectedAnggota && (
-        <Rnd
-          position={{ x: panelState.x, y: panelState.y }}
-          size={{ width: panelState.width, height: panelState.height }}
-          minWidth={isPanelMaximized ? window.innerWidth : 250}
-          minHeight={isPanelMaximized ? window.innerHeight : window.innerHeight * 0.6}
-          maxWidth={isPanelMaximized ? window.innerWidth : 500}
-          maxHeight={isPanelMaximized ? window.innerHeight : 700}
-          bounds={isPanelMaximized ? "parent" : "window"}
-          disableDragging={isPanelMaximized}
-          disableResizing={isPanelMaximized}
-          onDragStop={(e, d) => {
-            if (!isPanelMaximized) {
-              setPanelState(prev => ({ ...prev, x: d.x, y: d.y }));
-            }
-          }}
-          onResizeStop={(e, direction, ref, delta, position) => {
-            if (!isPanelMaximized) {
-              setPanelState({
-                x: position.x,
-                y: position.y,
-                width: ref.offsetWidth,
-                height: ref.offsetHeight,
-              });
-            }
-          }}
-          style={{
-            background: "#ffffff",
-            borderRadius: isPanelMaximized ? "0" : "12px",
-            padding: "0",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-            zIndex: 1000,
-            overflow: "hidden",
-          }}
-          className={`analytics-panel ${isPanelMaximized ? 'maximized-panel' : ''}`}
-        >
-          <Box sx={{ 
-            height: '100%',
-            width: '100%',
+      {/* Bottom Panel - Split Layout: List Petak (left), Chart (middle), Ringkasan Lahan (right) */}
+      {chartPanelVisible && selectedAnggota ? (
+        <Box
+          sx={{
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: isChartMaximized ? '50vh' : '320px',
+            marginBottom: dataPanelVisible ? '0' : '0',
+            backgroundColor: 'rgba(255, 255, 255, 0.98)',
+            borderTop: '2px solid rgba(0,0,0,0.1)',
+            boxShadow: '0 -4px 16px rgba(0,0,0,0.12)',
+            zIndex: 999,
             display: 'flex',
             flexDirection: 'column',
-            overflow: 'hidden'
-          }}>
-            {/* Fixed Header */}
-            <Box 
-              className="panel-controls"
-              sx={{ 
-                display: 'flex', 
-                justifyContent: 'space-between', 
-                alignItems: 'center', 
-                padding: '12px',
-                borderBottom: '1px solid #e0e0e0',
-                backgroundColor: '#ffffff',
-                position: 'sticky',
-                top: 0,
-                zIndex: 10,
-                flexShrink: 0
-              }}
-            >
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, paddingLeft: '8px' }}>
-                  <Typography variant="subtitle1" sx={{ fontSize: '0.9rem' }}>
-                    Analisis - {selectedAnggota.Nama}
-                  </Typography>
-
-                </Box>
-                <Box sx={{ display: 'flex', gap: 0.5 }}>
-                  <IconButton 
-                    size="small" 
-                    onClick={handleMaximizeChart}
-                    sx={{ color: 'text.secondary', padding: '4px' }}
-                    title={isChartMaximized ? "Restore Chart" : "Maximize Chart"}
-                  >
-                    {isChartMaximized ? <FullscreenExitIcon sx={{ fontSize: '18px' }} /> : <FullscreenIcon sx={{ fontSize: '18px' }} />}
-                  </IconButton>
-                  <IconButton 
-                    size="small" 
-                    onClick={handleMaximizePanel}
-                    sx={{ color: 'text.secondary', padding: '4px' }}
-                    title={isPanelMaximized ? "Restore Panel" : "Maximize Panel"}
-                  >
-                    {isPanelMaximized ? <FullscreenExitIcon sx={{ fontSize: '18px' }} /> : <FullscreenIcon sx={{ fontSize: '18px' }} />}
-                  </IconButton>
-                  <IconButton 
-                    size="small" 
-                    onClick={handleCloseAnalyticsPanel}
-                    sx={{ color: 'text.secondary', padding: '4px' }}
-                    title="Close Panel"
-                  >
-                    ×
-                  </IconButton>
-                </Box>
-              </Box>
-            
-            {/* Scrollable Content */}
-            <Box 
-              className="accordion-container" 
-              sx={{ 
-                flex: 1, 
-                overflowY: 'auto',
-                padding: '12px',
-                paddingTop: '6px'
-              }}
-            >
-              <Accordion 
-                defaultExpanded 
+            transition: 'height 0.3s ease',
+          }}
+        >
+          {/* Panel Header */}
+          <Box
+            sx={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '3px 10px',
+              borderBottom: '2px solid rgba(0,0,0,0.08)',
+              backgroundColor: '#ffffff',
+              flexShrink: 0,
+              boxShadow: '0 2px 4px rgba(0,0,0,0.04)'
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+              <Typography variant="subtitle2" sx={{ fontSize: '0.9rem', fontWeight: 600, color: '#212529' }}>
+                Analisis Petak
+              </Typography>
+             
+            </Box>
+            <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+    
+              <IconButton
+                size="small"
+                onClick={() => setChartPanelVisible(false)}
                 sx={{ 
-                  width: '100%',
-                  border: '1px solid #e0e0e0',
-                  borderRadius: '6px',
-                  '&:before': { display: 'none' }
+                  color: 'text.secondary', 
+                  padding: '6px',
+                  '&:hover': {
+                    backgroundColor: 'rgba(0,0,0,0.04)',
+                    color: 'text.primary'
+                  }
                 }}
+                title="Hide Panel"
               >
-              <AccordionSummary
-                expandIcon={<ExpandMoreIcon sx={{ fontSize: '18px' }} />}
-                aria-controls="summary-content"
-                id="summary-header"
-                sx={{ 
-                  backgroundColor: '#f8f9fa',
-                  borderTopLeftRadius: '6px',
-                  borderTopRightRadius: '6px',
-                  minHeight: '40px'
-                }}
-              >
-                <Typography sx={{ fontWeight: 600, fontSize: '0.85rem' }}>Ringkasan Lahan</Typography>
-              </AccordionSummary>
-              <AccordionDetails sx={{ width: '100%', padding: '12px' }}>
-                <Typography variant="caption" color="text.secondary" sx={{ marginBottom: '6px', fontSize: '0.7rem' }}>
-                  Luas Total: {selectedAnggota["Luas lahan"] || '0'} ha
-                </Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ marginBottom: '6px', fontSize: '0.7rem' }}>
-                  Jumlah Petak: {selectedAnggota.JumlahPetakAlami || '0'}
-                </Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ marginBottom: '6px', fontSize: '0.7rem' }}>
-                  Jenis Lahan: {selectedAnggota.JenisLahan || 'Tidak tersedia'}
-                </Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ marginBottom: '6px', fontSize: '0.7rem' }}>
-                  NIK: {selectedAnggota.Nik || 'Tidak tersedia'}
-                </Typography>
-              </AccordionDetails>
-            </Accordion>
-
-            <Accordion sx={{ width: '100%' }}>
-              <AccordionSummary
-                expandIcon={<ExpandMoreIcon sx={{ fontSize: '18px' }} />}
-                aria-controls="productivity-content"
-                id="productivity-header"
-                sx={{ width: '100%', minHeight: '40px' }}
-              >
-                <Typography sx={{ fontSize: '0.85rem' }}>Analisis Banjir</Typography>
-              </AccordionSummary>
-              <AccordionDetails sx={{ width: '100%', padding: '12px' }}>
-                <Box className="chart-container">
-                  <IconButton
-                    size="small"
-                    onClick={handleMaximizeChart}
-                    sx={{ 
-                      position: 'absolute', 
-                      top: 3, 
-                      right: 3, 
-                      zIndex: 1,
-                      backgroundColor: 'rgba(255,255,255,0.8)',
-                      padding: '2px',
-                      '&:hover': { backgroundColor: 'rgba(255,255,255,0.9)' }
-                    }}
-                    title={isChartMaximized ? "Restore Chart" : "Maximize Chart"}
-                  >
-                    {isChartMaximized ? "⛶" : "⛶"}
-                  </IconButton>
-                  <LineChart
-                    xAxis={[{ 
-                      data: chartData.dates,
-                      scaleType: 'band'
-                    }]}
-                    series={[
-                      {
-                        data: chartData.floodData,
-                        label: "Banjir",
-                        color: "#4e79a7",
-                      },
-                    ]}
-                    height={isChartMaximized ? 400 : 200}
-                    width={250}
-                    sx={{
-                      '.MuiChartsAxis-tickLabel': {
-                        fontSize: '0.65rem',
-                      }
-                    }}
-                  />
-                </Box>
-              </AccordionDetails>
-            </Accordion>
-
-            <Accordion sx={{ width: '100%' }}>
-              <AccordionSummary
-                expandIcon={<ExpandMoreIcon sx={{ fontSize: '18px' }} />}
-                aria-controls="drought-content"
-                id="drought-header"
-                sx={{ width: '100%', minHeight: '40px' }}
-              >
-                <Typography sx={{ fontSize: '0.85rem' }}>Analisis Kekeringan</Typography>
-              </AccordionSummary>
-              <AccordionDetails sx={{ width: '100%', padding: '12px' }}>
-                <Box className="chart-container">
-                  <IconButton
-                    size="small"
-                    onClick={handleMaximizeChart}
-                    sx={{ 
-                      position: 'absolute', 
-                      top: 3, 
-                      right: 3, 
-                      zIndex: 1,
-                      backgroundColor: 'rgba(255,255,255,0.8)',
-                      padding: '2px',
-                      '&:hover': { backgroundColor: 'rgba(255,255,255,0.9)' }
-                    }}
-                    title={isChartMaximized ? "Restore Chart" : "Maximize Chart"}
-                  >
-                    {isChartMaximized ? "⛶" : "⛶"}
-                  </IconButton>
-                  <LineChart
-                    xAxis={[{ 
-                      data: chartData.dates,
-                        scaleType: 'band'
-                    }]}
-                    series={[
-                      {
-                        data: chartData.droughtData,
-                        label: "Kekeringan",
-                        color: "#e15759",
-                      },
-                    ]}
-                    height={isChartMaximized ? 400 : 200}
-                    width={250}
-                    sx={{
-                      '.MuiChartsAxis-tickLabel': {
-                        fontSize: '0.65rem',
-                      }
-                    }}
-                  />
-                </Box>
-              </AccordionDetails>
-            </Accordion>
-
-            <Accordion sx={{ width: '100%' }}>
-              <AccordionSummary
-                expandIcon={<ExpandMoreIcon sx={{ fontSize: '18px' }} />}
-                aria-controls="rainfall-content"
-                id="rainfall-header"
-                sx={{ width: '100%', minHeight: '40px' }}
-              >
-                <Typography sx={{ fontSize: '0.85rem' }}>Analisis Curah Hujan</Typography>
-              </AccordionSummary>
-              <AccordionDetails sx={{ width: '100%', padding: '12px' }}>
-                <Box className="chart-container">
-                  <IconButton
-                    size="small"
-                    onClick={handleMaximizeChart}
-                    sx={{ 
-                      position: 'absolute', 
-                      top: 3, 
-                      right: 3, 
-                      zIndex: 1,
-                      backgroundColor: 'rgba(255,255,255,0.8)',
-                      padding: '2px',
-                      '&:hover': { backgroundColor: 'rgba(255,255,255,0.9)' }
-                    }}
-                    title={isChartMaximized ? "Restore Chart" : "Maximize Chart"}
-                  >
-                    {isChartMaximized ? "⛶" : "⛶"}
-                  </IconButton>
-                  <LineChart
-                    xAxis={[{ 
-                      data: chartData.dates,
-                      scaleType: 'band'
-                    }]}
-                    series={[
-                      {
-                        data: chartData.rainfallData,
-                        label: "Curah Hujan (mm)",
-                        color: "#59a14f",
-                      },
-                    ]}
-                    height={isChartMaximized ? 400 : 200}
-                    width={250}
-                    sx={{
-                      '.MuiChartsAxis-tickLabel': {
-                        fontSize: '0.65rem',
-                      }
-                    }}
-                  />
-                </Box>
-              </AccordionDetails>
-            </Accordion>
+                <span style={{ fontSize: '18px' }}>×</span>
+              </IconButton>
             </Box>
           </Box>
-        </Rnd>
-      )}
+
+          {/* Split Content: Left (List Petak), Middle (Chart), Right (Ringkasan Lahan) */}
+          <Box
+            sx={{
+              flex: 1,
+              display: 'flex',
+              overflow: 'hidden',
+            }}
+          >
+            {/* Left Side - List Petak */}
+            <Box
+              sx={{
+                width: '25%',
+                minWidth: '220px',
+                borderRight: '2px solid rgba(0,0,0,0.08)',
+                backgroundColor: '#fafafa',
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden',
+              }}
+            >
+              <Box
+                sx={{
+                  padding: '3px 10px',
+                  borderBottom: '1px solid rgba(0,0,0,0.08)',
+                  backgroundColor: '#f8f9fa',
+                }}
+              >
+                <Typography variant="subtitle2" sx={{ fontSize: '0.85rem', fontWeight: 600, color: '#212529' }}>
+                  Daftar Petak
+                </Typography>
+              </Box>
+              <Box
+                sx={{
+                  flex: 1,
+                  overflowY: 'auto',
+                  padding: '8px',
+                  '&::-webkit-scrollbar': {
+                    width: '6px',
+                  },
+                  '&::-webkit-scrollbar-track': {
+                    background: 'transparent',
+                  },
+                  '&::-webkit-scrollbar-thumb': {
+                    background: 'rgba(0,0,0,0.2)',
+                    borderRadius: '3px',
+                  },
+                  '&::-webkit-scrollbar-thumb:hover': {
+                    background: 'rgba(0,0,0,0.3)',
+                  },
+                }}
+              >
+                {loadingPetakList ? (
+                  <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px' }}>
+                    <Typography variant="body2" sx={{ fontSize: '0.75rem', color: '#6c757d' }}>
+                      Loading...
+                    </Typography>
+                  </Box>
+                ) : petakList.length === 0 ? (
+                  <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px' }}>
+                    <Typography variant="body2" sx={{ fontSize: '0.75rem', color: '#6c757d', textAlign: 'center' }}>
+                      Tidak ada data petak
+                    </Typography>
+                  </Box>
+                ) : (
+                  <List sx={{ padding: 0 }}>
+                    {petakList.map((petak, index) => (
+                      <ListItem
+                        key={petak.idpetak || petak.id || index}
+                        onClick={() => handlePetakClick(petak)}
+                        sx={{
+                          backgroundColor: selectedPetakId === (petak.idpetak || petak.id) ? '#e3f2fd' : 'transparent',
+                          border: selectedPetakId === (petak.idpetak || petak.id) ? '1px solid #1976d2' : '1px solid transparent',
+                          borderRadius: '6px',
+                          marginBottom: '4px',
+                          padding: '8px 12px',
+                          cursor: 'pointer',
+                          '&:hover': {
+                            backgroundColor: selectedPetakId === (petak.idpetak || petak.id) ? '#e3f2fd' : '#f5f5f5',
+                            borderColor: '#1976d2',
+                          },
+                          transition: 'all 0.2s ease',
+                        }}
+                      >
+                        <ListItemText
+                          primary={
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <Typography variant="body2" sx={{ fontSize: '0.75rem', fontWeight: 500 }}>
+                                Petak {index + 1}
+                              </Typography>
+                              {petak.luas && (
+                                <Typography variant="caption" sx={{ fontSize: '0.65rem', color: '#6c757d' }}>
+                                  ({parseFloat(petak.luas).toFixed(4)} ha)
+                                </Typography>
+                              )}
+                            </Box>
+                          }
+                          secondary={
+                            <Typography variant="caption" sx={{ fontSize: '0.65rem', color: '#6c757d', fontFamily: 'monospace' }}>
+                              ID: {petak.idpetak || petak.id || '-'}
+                            </Typography>
+                          }
+                        />
+                        <IconButton
+                          size="small"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            // Zoom to petak when zoom icon is clicked
+                            zoomToPetak(petak);
+                          }}
+                          sx={{
+                            padding: '4px',
+                            color: '#1976d2',
+                            '&:hover': {
+                              backgroundColor: 'rgba(25, 118, 210, 0.1)',
+                            },
+                          }}
+                          title="Zoom ke Petak"
+                        >
+                          <ZoomInIcon sx={{ fontSize: '18px' }} />
+                        </IconButton>
+                      </ListItem>
+                    ))}
+                  </List>
+                )}
+              </Box>
+            </Box>
+
+            {/* Middle Side - Chart */}
+            <Box
+              sx={{
+                width: '50%',
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden',
+                backgroundColor: '#ffffff',
+                borderRight: '2px solid rgba(0,0,0,0.08)',
+              }}
+            >
+              {selectedPetakId ? (
+                <>
+                  {/* Chart Header with Controls */}
+                  <Box
+                    sx={{
+                      padding: '0 10px',
+                      borderBottom: '1px solid rgba(0,0,0,0.08)',
+                      backgroundColor: '#f8f9fa',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Typography variant="subtitle2" sx={{ fontSize: '0.85rem', fontWeight: 600, color: '#212529' }}>
+                      Grafik Analisis Petak
+                    </Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, alignItems: 'center' }}>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        size="small"
+                        checked={showBare}
+                        onChange={(e) => setShowBare(e.target.checked)}
+                        sx={{ padding: '4px' }}
+                      />
+                    }
+                    label={<Typography sx={{ fontSize: '0.7rem' }}>Kekeringan (Bare)</Typography>}
+                  />
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        size="small"
+                        checked={showNdpi}
+                        onChange={(e) => setShowNdpi(e.target.checked)}
+                        sx={{ padding: '4px' }}
+                      />
+                    }
+                    label={<Typography sx={{ fontSize: '0.7rem' }}>Vegetasi (NDPI)</Typography>}
+                  />
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        size="small"
+                        checked={showWater}
+                        onChange={(e) => setShowWater(e.target.checked)}
+                        sx={{ padding: '4px' }}
+                      />
+                    }
+                    label={<Typography sx={{ fontSize: '0.7rem' }}>Banjir (Water)</Typography>}
+                  />
+                </Box>
+              </Box>
+
+              {/* Chart Content */}
+              <Box
+                sx={{
+                  flex: 1,
+                  padding: '16px',
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  overflow: 'auto',
+                }}
+              >
+                <Box
+                  className="chart-container"
+                  sx={{
+                    position: 'relative',
+                    width: '100%',
+                    maxWidth: '100%',
+                    height: '100%',
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                  }}
+                >
+                  <LineChart
+                    xAxis={[
+                      {
+                        data: chartData.dates.map((d) => new Date(d)),
+                        scaleType: "time",
+                        valueFormatter: (value) =>
+                          value.toLocaleDateString("en-GB", {
+                            day: "2-digit",
+                            month: "short",
+                            year: "2-digit",
+                          }), // dd mm yy
+                        tickMinStep: 1000 * 60 * 60 * 24 * 30, // sekitar 1 bulan
+                      },
+                    ]}
+                    series={[
+                      ...(showBare
+                        ? [
+                          {
+                            data: chartData.droughtData,
+                            label: "Kekeringan (Bare)",
+                            color: "#e15759",
+                            showMark: false,
+                            curve: "linear",
+                          },
+                        ]
+                        : []),
+                      ...(showNdpi
+                        ? [
+                          {
+                            data: chartData.rainfallData,
+                            label: "Vegetasi (NDPI)",
+                            color: "#59a14f",
+                            showMark: false,
+                            curve: "linear",
+                          },
+                        ]
+                        : []),
+                      ...(showWater
+                        ? [
+                          {
+                            data: chartData.floodData,
+                            label: "Banjir (Water)",
+                            color: "#4e79a7",
+                            showMark: false,
+                            curve: "linear",
+                          },
+                        ]
+                        : []),
+                    ]}
+                    height={isChartMaximized ? 400 : 220}
+                    width={Math.max(500, typeof window !== 'undefined' ? (window.innerWidth * 0.5) - 100 : 500)}
+                    slotProps={{
+                      legend: {
+                        direction: 'column',
+                        position: { vertical: 'middle', horizontal: 'right' },
+                        padding: 8,
+                        itemMarkWidth: 12,
+                        itemMarkHeight: 12,
+                        markGap: 8,
+                        itemGap: 12,
+                        labelStyle: {
+                          fontSize: '0.7rem',
+                        },
+                      },
+                    }}
+                    sx={{
+                      '.MuiChartsAxis-tickLabel': {
+                        fontSize: '0.65rem',
+                      }
+                    }}
+                  />
+                </Box>
+              </Box>
+            </>
+          ) : (
+            <Box
+              sx={{
+                flex: 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '32px',
+              }}
+            >
+              <Typography variant="body2" sx={{ color: '#6c757d', fontSize: '0.85rem', textAlign: 'center' }}>
+                Pilih petak di peta untuk melihat analisis chart
+              </Typography>
+            </Box>
+          )}
+            </Box>
+
+            {/* Right Side - Ringkasan Lahan */}
+            <Box
+              sx={{
+                width: '25%',
+                minWidth: '220px',
+                backgroundColor: '#fafafa',
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden',
+              }}
+            >
+              <Box
+                sx={{
+                  padding: '3px 10px',
+                  borderBottom: '1px solid rgba(0,0,0,0.08)',
+                  backgroundColor: '#f8f9fa',
+                }}
+              >
+                <Typography variant="subtitle2" sx={{ fontSize: '0.85rem', fontWeight: 600, color: '#212529' }}>
+                  Ringkasan Lahan
+                </Typography>
+              </Box>
+              <Box
+                sx={{
+                  flex: 1,
+                  overflowY: 'auto',
+                  padding: '16px',
+                  '&::-webkit-scrollbar': {
+                    width: '6px',
+                  },
+                  '&::-webkit-scrollbar-track': {
+                    background: 'transparent',
+                  },
+                  '&::-webkit-scrollbar-thumb': {
+                    background: 'rgba(0,0,0,0.2)',
+                    borderRadius: '3px',
+                  },
+                  '&::-webkit-scrollbar-thumb:hover': {
+                    background: 'rgba(0,0,0,0.3)',
+                  },
+                }}
+              >
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                  
+
+                  {/* Riwayat Tanam */}
+                  <Box sx={{ 
+                    display: 'flex', 
+                    flexDirection: 'column',
+                    padding: '10px',
+                    backgroundColor: '#fff3cd',
+                    borderRadius: '6px',
+                    border: '1px solid #ffc107',
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                  }}>
+                    <Typography variant="caption" sx={{ 
+                      fontSize: '0.65rem', 
+                      color: '#856404',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.5px',
+                      fontWeight: 600,
+                      marginBottom: '4px'
+                    }}>
+                      Riwayat Tanam (2 Tahun Terakhir)
+                    </Typography>
+                    <Typography variant="body2" sx={{ 
+                      fontSize: '0.95rem', 
+                      fontWeight: 600,
+                      color: '#856404'
+                    }}>
+                      {tanamCountLast2Years != null
+                        ? `${tanamCountLast2Years} kali tanam`
+                        : 'Tidak ada data'}
+                    </Typography>
+                  </Box>
+                </Box>
+              </Box>
+            </Box>
+          </Box>
+        </Box>
+      ) : null}
 
 
 
