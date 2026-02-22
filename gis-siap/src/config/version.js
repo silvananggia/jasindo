@@ -11,8 +11,8 @@
  */
 
 export const versionInfo = {
-  version: '0.0.2',
-  buildDate: '2026-02-02', // YYYY-MM-DD format - Update saat release baru
+  version: '0.0.3',
+  buildDate: '2026-02-22', // YYYY-MM-DD format - Update saat release baru
   buildTime: new Date().toTimeString().split(' ')[0], // HH:MM:SS format
   releaseNotes: 'Initial release',
 };
